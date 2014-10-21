@@ -1206,6 +1206,12 @@ limitations under the License.
       </dependency>
 
       <dependency>
+        <groupId>org.apache.flume.flume-ng-sources</groupId>
+        <artifactId>flume-s3-source</artifactId>
+        <version>1.6.0-SNAPSHOT</version>
+      </dependency>
+
+      <dependency>
         <groupId>org.apache.flume.flume-ng-legacy-sources</groupId>
         <artifactId>flume-avro-source</artifactId>
         <version>1.6.0-SNAPSHOT</version>

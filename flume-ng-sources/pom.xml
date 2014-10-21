@@ -45,6 +45,7 @@ limitations under the License.
     <module>flume-jms-source</module>
     <module>flume-twitter-source</module>
     <module>flume-kafka-source</module>
+    <module>flume-s3-source</module>
   </modules>
 
 </project>

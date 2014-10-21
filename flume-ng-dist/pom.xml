@@ -182,6 +182,10 @@
       <artifactId>flume-kafka-source</artifactId>
     </dependency>
     <dependency>
+      <groupId>org.apache.flume.flume-ng-sources</groupId>
+      <artifactId>flume-s3-source</artifactId>
+    </dependency>
+    <dependency>
       <groupId>org.apache.flume.flume-ng-legacy-sources</groupId>
       <artifactId>flume-avro-source</artifactId>
     </dependency>
