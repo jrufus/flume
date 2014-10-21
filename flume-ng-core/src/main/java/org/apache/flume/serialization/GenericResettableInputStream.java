@@ -34,6 +34,7 @@ import java.nio.charset.CharsetDecoder;
 import java.nio.charset.CoderResult;
 import java.nio.charset.CodingErrorAction;
 
+
 /**
 * <p/>This class makes the following assumptions:
 * <ol>
@@ -242,8 +243,19 @@ public class GenericResettableInputStream extends ResettableInputStream
   }
 
   @Override // TODO: see where the position is
-  public void markPosition(long position) throws IOException {
-    tracker.storePosition(position);
+  public void markPosition(long markPosition) throws IOException {
+    if (markPosition == position) { // current position
+      mark();
+      return;
+    } else if(markPosition > position) { // future position = error // RARE
+      System.out.println("------------------------ RARE CASE REACHED ------------mark position------------------");
+      return;
+    }
+    if() // within outputStream
+    if() // within buf
+
+    if() // past position, new stream, skipt to mark position , copy everything from there to position to outputstream, compact the buf// RARE
+    tracker.storePosition(markPosition);
   }
 
   @Override
@@ -259,10 +271,12 @@ public class GenericResettableInputStream extends ResettableInputStream
     buf.rewind();
     if(markedBuffer.size() == 0)  return;
 
-    ByteBuffer newbuf = ByteBuffer.allocate(markedBuffer.size() + buf.remaining());
-    newbuf.put(markedBuffer.toByteArray()).put(buf);
-    newbuf.flip();
-    buf = newbuf;
+    ByteBuffer newBuf = ByteBuffer.allocate(markedBuffer.size() + buf.remaining());
+    newBuf.put(markedBuffer.toByteArray()).put(buf);
+    assert (!newBuf.hasRemaining());
+    newBuf.flip();
+    assert (newBuf.remaining() == newBuf.limit());
+    buf = newBuf;
     markedBuffer.reset();
 
     // clear decoder state
@@ -303,10 +317,25 @@ public class GenericResettableInputStream extends ResettableInputStream
         markedBuffer.reset();
         in.skip(position - newPos);
       } else {
-        //TODO: if(seek position is in the outputstream)
-        //should be a v rare case
-        //TODO : logic for closing inputStream, wipe buffer, wipe outputstream
-        System.out.println("------------------------ RARE CASE REACHED ------------------------------");
+        //TODO: if(seek position is in the marked buffer outputstream)
+        long markedBufPos = relativeChange + markedBuffer.size() + buf.position();
+        if(markedBufPos > 0) {
+          buf.rewind();
+          ByteBuffer newBuf = ByteBuffer.allocate(markedBuffer.size() + buf.remaining());
+          byte[] markedArr = markedBuffer.toByteArray();
+          newBuf.put(markedArr, (int)markedBufPos, (int)(markedBuffer.size() - markedBufPos));
+          assert (!newBuf.hasRemaining());
+          newBuf.flip();
+          assert (newBuf.remaining() == newBuf.limit());
+
+          buf = newBuf;
+          markedBuffer.reset();
+          markedBuffer.write(markedArr, 0, (int)markedBufPos);
+        } else {
+          //should be a v rare case
+          //TODO : logic for closing inputStream, wipe buffer, wipe outputstream
+          System.out.println("------------------------ RARE CASE REACHED ------------------------------");
+        }
       }
     }
 
