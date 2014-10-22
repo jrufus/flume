@@ -248,11 +248,11 @@ public class GenericResettableInputStream extends ResettableInputStream
       mark();
       return;
     } else if(markPosition > position) { // future position = error // RARE
-      System.out.println("------------------------ RARE CASE REACHED ------------mark position------------------");
+      System.out.println("------------------------ RARE CASE REACHED ------------mark position-----to future-------------");
       return;
     }
     if() // within outputStream
-    if() // within buf
+    if(position - buf.position()) // within buf
 
     if() // past position, new stream, skipt to mark position , copy everything from there to position to outputstream, compact the buf// RARE
     tracker.storePosition(markPosition);
