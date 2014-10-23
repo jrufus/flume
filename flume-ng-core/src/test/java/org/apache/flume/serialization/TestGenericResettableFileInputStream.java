@@ -28,26 +28,20 @@ import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static org.junit.Assert.*;
-import static org.junit.Assert.assertEquals;
-
-import java.io.BufferedOutputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.OutputStream;
+import java.io.*;
 import java.nio.charset.Charset;
 import java.nio.charset.MalformedInputException;
 import java.util.List;
 
-public class TestResettableFileInputStream {
+import static org.junit.Assert.*;
+
+public class TestGenericResettableFileInputStream {
 
   private static final boolean CLEANUP = true;
   private static final File WORK_DIR =
       new File("target/test/work").getAbsoluteFile();
   private static final Logger logger = LoggerFactory.getLogger
-      (TestResettableFileInputStream.class);
+      (TestGenericResettableFileInputStream.class);
 
   private File file, meta;
 
@@ -71,14 +65,14 @@ public class TestResettableFileInputStream {
 
   /**
    * Ensure that we can simply read bytes from a file.
-   * @throws IOException
+   * @throws java.io.IOException
    */
-  @Test
+  //@Test
   public void testBasicRead() throws IOException {
     String output = singleLineFileInit(file, Charsets.UTF_8);
 
     PositionTracker tracker = new DurablePositionTracker(meta, file.getPath());
-    ResettableInputStream in = new ResettableFileInputStream(file,  tracker);
+    ResettableInputStream in = new GenericResettableInputStream(new FileInputStream(file), tracker, (int)file.length());
 
     String result = readLine(in, output.length());
     assertEquals(output, result);
@@ -92,14 +86,14 @@ public class TestResettableFileInputStream {
   /**
    * Ensure that we can process lines that contain multi byte characters in weird places
    * such as at the end of a buffer.
-   * @throws IOException
+   * @throws java.io.IOException
    */
   //@Test
   public void testWideCharRead() throws IOException {
     String output = wideCharFileInit(file, Charsets.UTF_8);
 
     PositionTracker tracker = new DurablePositionTracker(meta, file.getPath());
-    ResettableInputStream in = new ResettableFileInputStream(file,  tracker);
+    ResettableInputStream in = new GenericResettableInputStream(new FileInputStream(file), tracker, (int)file.length());
 
     String result = readLine(in, output.length());
     assertEquals(output, result);
@@ -139,16 +133,8 @@ public class TestResettableFileInputStream {
     while ((c = in.readChar()) != -1) {
       sb.append((char)c);
     }
-    String preJdk8ExpectedStr = "Latin1: (X)\nLong: (XXX)\nNonUnicode: (X)\n";
-    String expectedStr = "Latin1: (X)\nLong: (XXX)\nNonUnicode: (XXXXX)\n";
-    String javaVersionStr = System.getProperty("java.version");
-    double javaVersion = Double.parseDouble(javaVersionStr.substring(0, 3));
-
-    if(javaVersion < 1.8) {
-      assertTrue(preJdk8ExpectedStr.replaceAll("X", "\ufffd").equals(sb.toString()));
-    } else {
-      assertTrue(expectedStr.replaceAll("X", "\ufffd").equals(sb.toString()));
-    }
+    assertEquals("Latin1: (X)\nLong: (XXX)\nNonUnicode: (X)\n"
+        .replaceAll("X", "\ufffd"), sb.toString());
   }
 
   //@Test(expected = MalformedInputException.class)
@@ -187,8 +173,7 @@ public class TestResettableFileInputStream {
   private ResettableInputStream initInputStream(DecodeErrorPolicy policy)
       throws IOException {
     PositionTracker tracker = new DurablePositionTracker(meta, file.getPath());
-    ResettableInputStream in = new ResettableFileInputStream(file, tracker,
-        2048, Charsets.UTF_8, policy);
+    ResettableInputStream in = new GenericResettableInputStream(new FileInputStream(file), tracker, 2048, Charsets.UTF_8, policy, (int)file.length());
     return in;
   }
 
@@ -234,14 +219,14 @@ public class TestResettableFileInputStream {
 
   /**
    * Ensure a reset() brings us back to the default mark (beginning of file)
-   * @throws IOException
+   * @throws java.io.IOException
    */
-  //@Test
+  @Test
   public void testReset() throws IOException {
     String output = singleLineFileInit(file, Charsets.UTF_8);
 
     PositionTracker tracker = new DurablePositionTracker(meta, file.getPath());
-    ResettableInputStream in = new ResettableFileInputStream(file, tracker);
+    ResettableInputStream in = new GenericResettableInputStream(new FileInputStream(file), tracker, (int)file.length());
 
     String result1 = readLine(in, output.length());
     assertEquals(output, result1);
@@ -258,7 +243,7 @@ public class TestResettableFileInputStream {
 
   /**
    * Ensure that marking and resetting works.
-   * @throws IOException
+   * @throws java.io.IOException
    */
   //@Test
   public void testMarkReset() throws IOException {
@@ -390,7 +375,7 @@ public class TestResettableFileInputStream {
    * @param file
    * @param charset
    * @return
-   * @throws IOException
+   * @throws java.io.IOException
    */
   private static String wideCharFileInit(File file, Charset charset)
       throws IOException {
@@ -404,7 +389,7 @@ public class TestResettableFileInputStream {
    * @param in
    * @param maxLength
    * @return
-   * @throws IOException
+   * @throws java.io.IOException
    */
   private static String readLine(ResettableInputStream in, int maxLength)
       throws IOException {
@@ -417,7 +402,7 @@ public class TestResettableFileInputStream {
       if (c == '\n') {
         break;
       }
-      //System.out.printf("seen char val: %c\n", (char)c);
+      System.out.printf("seen char val: %c\n", (char)c);
       s.append((char)c);
 
       if (i++ > maxLength) {

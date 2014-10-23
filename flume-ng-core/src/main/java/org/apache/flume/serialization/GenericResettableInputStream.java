@@ -27,8 +27,7 @@ import org.slf4j.LoggerFactory;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.ByteBuffer;
-import java.nio.CharBuffer;
+import java.nio.*;
 import java.nio.charset.Charset;
 import java.nio.charset.CharsetDecoder;
 import java.nio.charset.CoderResult;
@@ -77,6 +76,8 @@ public class GenericResettableInputStream extends ResettableInputStream
    *
    * @throws java.io.FileNotFoundException
    */
+
+  //TODO: Constructor should pass a new class object, that knows how to iniitialize and construt itself again, returning a new InputStream - eg : S3Stream.create()
   public GenericResettableInputStream(InputStream stream, PositionTracker tracker, int length)
       throws IOException {
     this(stream, tracker, DEFAULT_BUF_SIZE, Charsets.UTF_8, DecodeErrorPolicy.FAIL, length);
@@ -103,7 +104,8 @@ public class GenericResettableInputStream extends ResettableInputStream
       throws IOException {
     this.tracker = tracker;
     this.in = stream;
-    this.buf = ByteBuffer.allocate(bufSize);
+    this.buf = ByteBuffer.wrap(new byte[bufSize]);
+    System.out.println("processedSize ----"+buf.position()+"  "+buf.hasRemaining()+" --- "+buf.capacity()+"  "+buf.limit());
     buf.flip();
     this.byteBuf = new byte[1]; // single byte
     this.charBuf = CharBuffer.allocate(1); // single char
@@ -115,7 +117,7 @@ public class GenericResettableInputStream extends ResettableInputStream
     this.maxCharWidth = (int)Math.ceil(charset.newEncoder().maxBytesPerChar());
     this.length = length;
     this.markedBuffer = new ByteArrayOutputStream();
-    this.marker = 0;
+    //this.marker = 0;
 
     CodingErrorAction errorAction;
     switch (decodeErrorPolicy) {
@@ -178,8 +180,9 @@ public class GenericResettableInputStream extends ResettableInputStream
     // This check ensures that there are at least maxCharWidth bytes in the buffer
     // before reaching EOF.
     if (buf.remaining() < maxCharWidth) {
-      buf.clear();
-      buf.flip();
+      System.out.println("buf.remaining() < maxCharWidth  "+ buf.remaining() +" --- "+ maxCharWidth);
+      //buf.clear();
+      //buf.flip();
       refillBuf();
     }
 
@@ -217,17 +220,45 @@ public class GenericResettableInputStream extends ResettableInputStream
 
   private void refillBuf() throws IOException {
     //int prevSize = buf.remaining();
-    int processedSize = buf.position();
-    buf.rewind();
+    System.out.println(" refillBuf() starting  --- "+buf.hasRemaining()+" --- "+buf.capacity()+"  "+buf.limit()+"  -- "+buf.position());
+    int currPos = buf.position();
+    int currLimit = buf.limit();
+    int remaining = buf.remaining();
+    assert buf.remaining() == currLimit - currPos;
+
     //int processedSize = buf.remaining() - prevSize;
 
-    byte[] processedBuf = new byte[processedSize];
-    buf.get(processedBuf);
-    if(marked) {
+
+
+    if(marked && currPos > 0) {
+      byte[] processedBuf = new byte[currPos];
+      buf.rewind();
+      buf.get(processedBuf);
+      assert buf.position() == currPos;
       markedBuffer.write(processedBuf);
     }
+    //buf.position(currPos); TODO use this if assert buf.position() == currPos; above fails
     buf.compact();
 
+    if(!buf.hasArray())
+      throw new IllegalStateException("Byte buffer should be backed by ARRAY");
+    System.out.println("processedSize ----"+currPos+"  "+buf.hasRemaining()+" --- "+buf.capacity()+"  "+buf.limit()+"  -- "+buf.position());
+
+    int bytesRead = in.read(buf.array(), buf.position(), buf.capacity() - buf.position());
+
+    System.out.println("bytesREAd ----"+bytesRead+ " --- "+buf.hasRemaining()+" --- "+buf.capacity()+"  "+buf.limit()+"  -- "+buf.position());
+    if(bytesRead < 0 || bytesRead == 0) {
+      buf.flip();
+      return;
+    }
+
+
+//  buf.put(tempBuf, 0, bytesRead);
+    buf.clear();
+    buf.position(remaining + bytesRead);
+    buf.flip();
+    System.out.println("bytesREAd ----"+bytesRead+ " --- "+buf.hasRemaining()+" --- "+buf.capacity()+"  "+buf.limit()+"  -- "+buf.position());
+    //TODO: after filling do flip()
 //    chan.position(position); // ensure we read from the proper offset
 //    chan.read(buf);
 //    buf.flip();
@@ -239,22 +270,39 @@ public class GenericResettableInputStream extends ResettableInputStream
     tracker.storePosition(tell());
     markedBuffer.reset();
     buf.compact();
+    buf.flip();
     marked = true;
   }
 
   @Override // TODO: see where the position is
   public void markPosition(long markPosition) throws IOException {
+    long savedPosition = buf.position();
+    int relMarkPos = (int)(savedPosition - (position - markPosition));
+
     if (markPosition == position) { // current position
       mark();
       return;
     } else if(markPosition > position) { // future position = error // RARE
       System.out.println("------------------------ RARE CASE REACHED ------------mark position-----to future-------------");
       return;
-    }
-    if() // within outputStream
-    if(position - buf.position()) // within buf
+    } else if(markPosition >= position - buf.position()) { // within buf //TODO: Verify >=
+      buf.position(relMarkPos);
+      buf.compact();
+      //buf.position(buf.capacity() - relMarkPos); //TODO: verify this
+      buf.flip();
 
-    if() // past position, new stream, skipt to mark position , copy everything from there to position to outputstream, compact the buf// RARE
+      buf.position((int)savedPosition - relMarkPos);
+      marked = true;
+    } else if(markedBuffer.size() + relMarkPos >= 0) { // within outputStream
+      int newBufPos = markedBuffer.size() + relMarkPos;
+      byte[] newBuf = new byte[relMarkPos];
+      markedBuffer.write(newBuf, markedBuffer.size() - relMarkPos, relMarkPos);
+      markedBuffer = new ByteArrayOutputStream();
+      markedBuffer.write(newBuf);
+    } else { // past position, new stream, skipt to mark position , copy everything from there to position to outputstream, compact the buf// RARE
+      //TODO:
+    }
+
     tracker.storePosition(markPosition);
   }
 
@@ -361,6 +409,12 @@ public class GenericResettableInputStream extends ResettableInputStream
   public void close() throws IOException {
     tracker.close();
     in.close();
+  }
+
+  public static void main(String[] args) {
+
+//    File f = new File();
+//    GenericResettableInputStream is = new GenericResettableInputStream(stream, tracker, length, bufSize, charset, decodeErrorPolicy, length);
   }
 
 }
