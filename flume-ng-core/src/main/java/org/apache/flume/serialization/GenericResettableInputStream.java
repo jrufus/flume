@@ -346,7 +346,7 @@ public class GenericResettableInputStream extends ResettableInputStream
   public long tell() throws IOException {
     logger.trace("Tell position: {}", syncPosition);
 
-    return syncPosition;
+    return position;
   }
 
   @Override
@@ -368,7 +368,8 @@ public class GenericResettableInputStream extends ResettableInputStream
       buf.flip();
       if(newPos > position) {
         markedBuffer.reset();
-        in.skip(position - newPos);
+        System.out.println("Skipping to ---- "+ (newPos - position) + "this.length is -----     " + this.length);
+        in.skip(newPos - position);
       } else {
         //TODO: if(seek position is in the marked buffer outputstream)
         long markedBufPos = relativeChange + markedBuffer.size() + buf.position();
