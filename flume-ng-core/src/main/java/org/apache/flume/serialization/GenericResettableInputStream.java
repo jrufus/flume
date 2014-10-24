@@ -65,10 +65,11 @@ public class GenericResettableInputStream extends ResettableInputStream
   private boolean marked;
   private ByteBuffer buf;
   private InputStream in;
+  private StreamCreator streamCreator;
 
   /**
    *
-   * @param stream
+   * @param streamCreator
    *        Stream to read
    *
    * @param tracker
@@ -78,14 +79,14 @@ public class GenericResettableInputStream extends ResettableInputStream
    */
 
   //TODO: Constructor should pass a new class object, that knows how to iniitialize and construt itself again, returning a new InputStream - eg : S3Stream.create()
-  public GenericResettableInputStream(InputStream stream, PositionTracker tracker, int length)
+  public GenericResettableInputStream(StreamCreator streamCreator, PositionTracker tracker, int length)
       throws IOException {
-    this(stream, tracker, DEFAULT_BUF_SIZE, Charsets.UTF_8, DecodeErrorPolicy.FAIL, length);
+    this(streamCreator, tracker, DEFAULT_BUF_SIZE, Charsets.UTF_8, DecodeErrorPolicy.FAIL, length);
   }
 
   /**
    *
-   * @param stream
+   * @param streamCreator
    *        Stream to read
    *
    * @param tracker
@@ -99,11 +100,12 @@ public class GenericResettableInputStream extends ResettableInputStream
    *
    * @throws java.io.FileNotFoundException
    */
-  public GenericResettableInputStream(InputStream stream, PositionTracker tracker,
+  public GenericResettableInputStream(StreamCreator streamCreator, PositionTracker tracker,
                                       int bufSize, Charset charset, DecodeErrorPolicy decodeErrorPolicy, int length)
       throws IOException {
     this.tracker = tracker;
-    this.in = stream;
+    this.streamCreator = streamCreator;
+    this.in = streamCreator.create();
     this.buf = ByteBuffer.wrap(new byte[bufSize]);
     System.out.println("processedSize ----"+buf.position()+"  "+buf.hasRemaining()+" --- "+buf.capacity()+"  "+buf.limit());
     buf.flip();
@@ -313,8 +315,11 @@ public class GenericResettableInputStream extends ResettableInputStream
 
   @Override
   public void reset() throws IOException {
-    //seek(tracker.getPosition());
-    if(!marked) return;
+
+    if(!marked) {
+      seek(tracker.getPosition());
+      return;
+    }
     marked = false;
     buf.rewind();
     if(markedBuffer.size() == 0)  return;
@@ -356,7 +361,7 @@ public class GenericResettableInputStream extends ResettableInputStream
     if (newBufPos >= 0 && newBufPos < buf.limit()) {
       // we can reuse the read buffer
       buf.position((int)newBufPos);
-    } else if(newPos == tracker.getPosition()) {
+    } else if(marked && newPos == tracker.getPosition()) {
       reset();
     } else {
       buf.clear();
@@ -381,7 +386,14 @@ public class GenericResettableInputStream extends ResettableInputStream
           markedBuffer.write(markedArr, 0, (int)markedBufPos);
         } else {
           //should be a v rare case
-          //TODO : logic for closing inputStream, wipe buffer, wipe outputstream
+          //TODO : logic for closing inputStream, wipe buffer, wipe outputstream and reopen stream and seek
+          in.close();
+          markedBuffer.reset();
+          buf.clear();
+          buf.flip();
+          assert buf.remaining() == 0;
+          in = streamCreator.create();
+          in.skip(newPos);
           System.out.println("------------------------ RARE CASE REACHED ------------------------------");
         }
       }

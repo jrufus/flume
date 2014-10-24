@@ -17,8 +17,8 @@
  */
 package org.apache.flume.serialization;
 
-import java.io.IOException;
+import java.io.InputStream;
 
 public interface StreamCreator {
-
+  public InputStream create();
 }

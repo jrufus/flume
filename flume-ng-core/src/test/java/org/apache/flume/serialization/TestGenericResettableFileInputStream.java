@@ -72,7 +72,7 @@ public class TestGenericResettableFileInputStream {
     String output = singleLineFileInit(file, Charsets.UTF_8);
 
     PositionTracker tracker = new DurablePositionTracker(meta, file.getPath());
-    ResettableInputStream in = new GenericResettableInputStream(new FileInputStream(file), tracker, (int)file.length());
+    ResettableInputStream in = new GenericResettableInputStream(new FileStreamCreator(file), tracker, (int)file.length());
 
     String result = readLine(in, output.length());
     assertEquals(output, result);
@@ -93,7 +93,7 @@ public class TestGenericResettableFileInputStream {
     String output = wideCharFileInit(file, Charsets.UTF_8);
 
     PositionTracker tracker = new DurablePositionTracker(meta, file.getPath());
-    ResettableInputStream in = new GenericResettableInputStream(new FileInputStream(file), tracker, (int)file.length());
+    ResettableInputStream in = new GenericResettableInputStream(new FileStreamCreator(file), tracker, (int)file.length());
 
     String result = readLine(in, output.length());
     assertEquals(output, result);
@@ -173,7 +173,7 @@ public class TestGenericResettableFileInputStream {
   private ResettableInputStream initInputStream(DecodeErrorPolicy policy)
       throws IOException {
     PositionTracker tracker = new DurablePositionTracker(meta, file.getPath());
-    ResettableInputStream in = new GenericResettableInputStream(new FileInputStream(file), tracker, 2048, Charsets.UTF_8, policy, (int)file.length());
+    ResettableInputStream in = new GenericResettableInputStream(new FileStreamCreator(file), tracker, 2048, Charsets.UTF_8, policy, (int)file.length());
     return in;
   }
 
@@ -226,7 +226,7 @@ public class TestGenericResettableFileInputStream {
     String output = singleLineFileInit(file, Charsets.UTF_8);
 
     PositionTracker tracker = new DurablePositionTracker(meta, file.getPath());
-    ResettableInputStream in = new GenericResettableInputStream(new FileInputStream(file), tracker, (int)file.length());
+    ResettableInputStream in = new GenericResettableInputStream(new FileStreamCreator(file), tracker, (int)file.length());
 
     String result1 = readLine(in, output.length());
     assertEquals(output, result1);
