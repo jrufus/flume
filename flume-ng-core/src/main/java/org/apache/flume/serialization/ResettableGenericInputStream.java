@@ -45,10 +45,10 @@ import java.nio.charset.CodingErrorAction;
 */
 @InterfaceAudience.Private
 @InterfaceStability.Evolving
-public class GenericResettableInputStream extends ResettableInputStream
+public class ResettableGenericInputStream extends ResettableInputStream
     implements RemoteMarkable, LengthMeasurable {
 
-  Logger logger = LoggerFactory.getLogger(GenericResettableInputStream.class);
+  Logger logger = LoggerFactory.getLogger(ResettableGenericInputStream.class);
 
   public static final int DEFAULT_BUF_SIZE = 16384;
 
@@ -64,30 +64,32 @@ public class GenericResettableInputStream extends ResettableInputStream
   private ByteArrayOutputStream markedBuffer;
   private boolean marked;
   private ByteBuffer buf;
-  private InputStream in;
+  private InputStream stream;
   private StreamCreator streamCreator;
+  private long totalBytesRead;
 
   /**
    *
    * @param streamCreator
-   *        Stream to read
+   *        Stream creator to read stream from
    *
    * @param tracker
    *        PositionTracker implementation to make offset position durable
    *
-   * @throws java.io.FileNotFoundException
+   * @param length
+   *        total length of the stream to be read
+   *
+   * @throws java.io.IOException
    */
-
-  //TODO: Constructor should pass a new class object, that knows how to iniitialize and construt itself again, returning a new InputStream - eg : S3Stream.create()
-  public GenericResettableInputStream(StreamCreator streamCreator, PositionTracker tracker, int length)
-      throws IOException {
+  public ResettableGenericInputStream(StreamCreator streamCreator,
+                                      PositionTracker tracker, int length) throws IOException {
     this(streamCreator, tracker, DEFAULT_BUF_SIZE, Charsets.UTF_8, DecodeErrorPolicy.FAIL, length);
   }
 
   /**
    *
    * @param streamCreator
-   *        Stream to read
+   *        Stream creator to read stream from
    *
    * @param tracker
    *        PositionTracker implementation to make offset position durable
@@ -98,14 +100,14 @@ public class GenericResettableInputStream extends ResettableInputStream
    * @param charset
    *        Character set used for decoding text, as necessary
    *
-   * @throws java.io.FileNotFoundException
+   * @throws java.io.IOException
    */
-  public GenericResettableInputStream(StreamCreator streamCreator, PositionTracker tracker,
-                                      int bufSize, Charset charset, DecodeErrorPolicy decodeErrorPolicy, int length)
-      throws IOException {
+  public ResettableGenericInputStream(StreamCreator streamCreator,
+                                      PositionTracker tracker, int bufSize, Charset charset,
+                                      DecodeErrorPolicy policy, int length) throws IOException {
     this.tracker = tracker;
     this.streamCreator = streamCreator;
-    this.in = streamCreator.create();
+    this.stream = streamCreator.create();
     this.buf = ByteBuffer.wrap(new byte[bufSize]);
     System.out.println("processedSize ----"+buf.position()+"  "+buf.hasRemaining()+" --- "+buf.capacity()+"  "+buf.limit());
     buf.flip();
@@ -115,14 +117,13 @@ public class GenericResettableInputStream extends ResettableInputStream
     this.fileSize = length;
     this.decoder = charset.newDecoder();
     this.position = 0;
-    this.syncPosition = 0;
     this.maxCharWidth = (int)Math.ceil(charset.newEncoder().maxBytesPerChar());
     this.length = length;
     this.markedBuffer = new ByteArrayOutputStream();
-    //this.marker = 0;
+    this.totalBytesRead = 0;
 
     CodingErrorAction errorAction;
-    switch (decodeErrorPolicy) {
+    switch (policy) {
       case FAIL:
         errorAction = CodingErrorAction.REPORT;
         break;
@@ -134,7 +135,7 @@ public class GenericResettableInputStream extends ResettableInputStream
         break;
       default:
         throw new IllegalArgumentException(
-            "Unexpected value for decode error policy: " + decodeErrorPolicy);
+            "Unexpected value for decode error policy: " + policy);
     }
     decoder.onMalformedInput(errorAction);
     decoder.onUnmappableCharacter(errorAction);
@@ -222,7 +223,7 @@ public class GenericResettableInputStream extends ResettableInputStream
 
   private void refillBuf() throws IOException {
     //int prevSize = buf.remaining();
-    System.out.println(" refillBuf() starting  --- "+buf.hasRemaining()+" --- "+buf.capacity()+"  "+buf.limit()+"  -- "+buf.position());
+    System.out.println("Insid refillbuff ----  remaining: "+buf.hasRemaining()+" --- position -- "+this.position+" limit -- "+buf.limit()+"  -- buf.position() -- "+buf.position());
     int currPos = buf.position();
     int currLimit = buf.limit();
     int remaining = buf.remaining();
@@ -244,11 +245,14 @@ public class GenericResettableInputStream extends ResettableInputStream
 
     if(!buf.hasArray())
       throw new IllegalStateException("Byte buffer should be backed by ARRAY");
-    System.out.println("processedSize ----"+currPos+"  "+buf.hasRemaining()+" --- "+buf.capacity()+"  "+buf.limit()+"  -- "+buf.position());
+    System.out.println("processedSize ----"+currPos+"  remaining: "+buf.hasRemaining()+" --- position -- "+this.position+" limit -- "+buf.limit()+"  -- buf.position() -- "+buf.position());
 
-    int bytesRead = in.read(buf.array(), buf.position(), buf.capacity() - buf.position());
+    System.out.println("Abut to READ ---- "+ (buf.capacity() - buf.position()));
+    int bytesRead = stream.read(buf.array(), buf.position(), buf.capacity() - buf.position());
+    this.totalBytesRead += bytesRead;
 
-    System.out.println("bytesREAd ----"+bytesRead+ " --- "+buf.hasRemaining()+" --- "+buf.capacity()+"  "+buf.limit()+"  -- "+buf.position());
+
+    System.out.println("totalBytesRead ----"+totalBytesRead+ "  bytesREAd ----"+bytesRead+ " --- "+buf.hasRemaining()+" --- "+buf.capacity()+"  "+buf.limit()+"  -- "+buf.position());
     if(bytesRead < 0 || bytesRead == 0) {
       buf.flip();
       return;
@@ -259,7 +263,7 @@ public class GenericResettableInputStream extends ResettableInputStream
     buf.clear();
     buf.position(remaining + bytesRead);
     buf.flip();
-    System.out.println("bytesREAd ----"+bytesRead+ " --- "+buf.hasRemaining()+" --- "+buf.capacity()+"  "+buf.limit()+"  -- "+buf.position());
+    System.out.println("bytesREAd ----"+bytesRead+"  remaining: "+buf.hasRemaining()+" --- position -- "+this.position+" limit -- "+buf.limit()+"  -- buf.position() -- "+buf.position());
     //TODO: after filling do flip()
 //    chan.position(position); // ensure we read from the proper offset
 //    chan.read(buf);
@@ -366,10 +370,12 @@ public class GenericResettableInputStream extends ResettableInputStream
     } else {
       buf.clear();
       buf.flip();
-      if(newPos > position) {
+      if(newPos > position) { //TODO: Do we have to discard previous mark ? or save all the seek data for reset to work ?
         markedBuffer.reset();
-        System.out.println("Skipping to ---- "+ (newPos - position) + "this.length is -----     " + this.length);
-        in.skip(newPos - position);
+        long bytesToSkip = newPos - totalBytesRead;
+        stream.skip(bytesToSkip);
+        totalBytesRead += bytesToSkip;
+        System.out.println("Skipping bytes ---- "+ bytesToSkip + "  this.length is -----     " + this.length+"  totalbytesREead = "+totalBytesRead);
       } else {
         //TODO: if(seek position is in the marked buffer outputstream)
         long markedBufPos = relativeChange + markedBuffer.size() + buf.position();
@@ -388,13 +394,14 @@ public class GenericResettableInputStream extends ResettableInputStream
         } else {
           //should be a v rare case
           //TODO : logic for closing inputStream, wipe buffer, wipe outputstream and reopen stream and seek
-          in.close();
+          stream.close();
           markedBuffer.reset();
           buf.clear();
           buf.flip();
           assert buf.remaining() == 0;
-          in = streamCreator.create();
-          in.skip(newPos);
+          stream = streamCreator.create();
+          stream.skip(newPos);
+          totalBytesRead = newPos;
           System.out.println("------------------------ RARE CASE REACHED ------------------------------");
         }
       }
@@ -409,6 +416,7 @@ public class GenericResettableInputStream extends ResettableInputStream
 
     // reset position pointers
     position = syncPosition = newPos;
+    System.out.println("After seeking to newPos - Position is ---- "+ position);
   }
 
   private void incrPosition(int incr, boolean updateSyncPosition) {
@@ -421,13 +429,13 @@ public class GenericResettableInputStream extends ResettableInputStream
   @Override
   public void close() throws IOException {
     tracker.close();
-    in.close();
+    stream.close();
   }
 
   public static void main(String[] args) {
 
 //    File f = new File();
-//    GenericResettableInputStream is = new GenericResettableInputStream(stream, tracker, length, bufSize, charset, decodeErrorPolicy, length);
+//    ResettableGenericInputStream is = new ResettableGenericInputStream(stream, tracker, length, bufSize, charset, decodeErrorPolicy, length);
   }
 
 }

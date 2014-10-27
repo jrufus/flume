@@ -24,26 +24,23 @@ import com.amazonaws.services.s3.model.ObjectListing;
 import com.amazonaws.services.s3.model.S3Object;
 import com.amazonaws.services.s3.model.S3ObjectInputStream;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
+
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Charsets;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.io.Files;
-import com.sun.xml.internal.bind.v2.TODO;
 import org.apache.flume.Context;
 import org.apache.flume.Event;
 import org.apache.flume.FlumeException;
 import org.apache.flume.annotations.InterfaceAudience;
 import org.apache.flume.annotations.InterfaceStability;
 import org.apache.flume.serialization.*;
-import org.apache.flume.source.SpoolDirectorySourceConfigurationConstants;
-import org.apache.flume.source.SpoolDirectorySourceConfigurationConstants.ConsumeOrder;
-import org.apache.flume.tools.PlatformDetect;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.io.FileFilter;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.charset.Charset;
@@ -90,9 +87,9 @@ public class S3ObjectEventReader  {
   private final Charset inputCharset;
   private final DecodeErrorPolicy decodeErrorPolicy;
 
-  private Optional<FileInfo> currentFile = Optional.absent();
+  private Optional<S3ObjectInfo> currentFile = Optional.absent();
   /** Always contains the last file from which lines have been read. **/
-  private Optional<FileInfo> lastFileRead = Optional.absent();
+  private Optional<S3ObjectInfo> lastFileRead = Optional.absent();
   private boolean committed = true;
 
   /** Instance var to Cache directory listing **/
@@ -384,13 +381,11 @@ public class S3ObjectEventReader  {
    * @return {@link } for the file to consume or absent option if the
    * file does not exists or readable.
    */
-  private Optional<FileInfo> openFile(S3ObjectSummary objSummary) {
+  private Optional<S3ObjectInfo> openFile(S3ObjectSummary objSummary) {
 
     S3Object object = s3Client.getObject(bucketName, objSummary.getKey());
     S3ObjectInputStream is = object.getObjectContent();
-    //is.
-    File file = null; //TODO
-    try {
+   try {
       // roll the meta file, if needed
       String nextPath = objSummary.getKey();
       PositionTracker tracker =
@@ -407,8 +402,8 @@ public class S3ObjectEventReader  {
           tracker.getTarget(), nextPath);
 
       ResettableInputStream in =
-          new ResettableFileInputStream(file, tracker,
-              ResettableFileInputStream.DEFAULT_BUF_SIZE, inputCharset,
+          new ResettableGenericInputStream(new S3StreamCreator(conn, bucketName, nextPath), tracker,
+                  ResettableGenericInputStream.DEFAULT_BUF_SIZE, inputCharset,
               decodeErrorPolicy);
       EventDeserializer deserializer = EventDeserializerFactory.getInstance
           (deserializerType, deserializerContext, in);
@@ -430,24 +425,21 @@ public class S3ObjectEventReader  {
     }
   }
 
-  /** An immutable class with information about a file being processed. */
-  private static class FileInfo {
-    private final File file;
+  /** An immutable class with information about a S3Object being processed. */
+  private static class S3ObjectInfo {
+    private final String key;
     private final long length;
-    private final long lastModified;
     private final EventDeserializer deserializer;
 
-    public FileInfo(File file, EventDeserializer deserializer) {
-      this.file = file;
-      this.length = file.length();
-      this.lastModified = file.lastModified();
+    public S3ObjectInfo(String key, EventDeserializer deserializer, long length) {
+      this.key = key;
+      this.length = length;
       this.deserializer = deserializer;
     }
 
     public long getLength() { return length; }
-    public long getLastModified() { return lastModified; }
     public EventDeserializer getDeserializer() { return deserializer; }
-    public File getFile() { return file; }
+    public String getKey() { return key; }
   }
 
 

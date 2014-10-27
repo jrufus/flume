@@ -25,12 +25,10 @@ import com.amazonaws.util.StringUtils;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Throwables;
 import org.apache.flume.*;
-import org.apache.flume.client.avro.ReliableSpoolingFileEventReader;
 import org.apache.flume.conf.Configurable;
 import org.apache.flume.instrumentation.SourceCounter;
 import org.apache.flume.serialization.DecodeErrorPolicy;
 import org.apache.flume.source.AbstractSource;
-import org.apache.flume.source.SpoolDirectorySourceConfigurationConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
