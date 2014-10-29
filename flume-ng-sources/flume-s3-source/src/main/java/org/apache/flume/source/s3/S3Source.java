@@ -62,7 +62,7 @@ public class S3Source extends AbstractSource
 
   private static final Logger logger = LoggerFactory.getLogger(S3Source.class);
 // Delay used when polling for new files
-  private static final int POLL_DELAY_MS = 500;
+  private static final int POLL_DELAY_MS = 5000; //TODO: see if this is fine, for spooling dir source this is 500ms
 
   /* Config options */
   private String bucketName;
@@ -70,7 +70,7 @@ public class S3Source extends AbstractSource
   private String accessKey;
   private String secretKey;
   private String endPoint;
-  private String backingDir;
+  private File backingDir;
   private MetadataBackingStore backingStore;
 
   private String deserializerType;
@@ -99,15 +99,15 @@ public class S3Source extends AbstractSource
     secretKey = context.getString(SECRET_KEY);
     Preconditions.checkState(bucketName != null, "Configuration must specify a secret key");
 
-    backingDir = context.getString(BACKING_DIR);
-    Preconditions.checkState(backingDir != null, "Configuration must specify a directory for storing metadata");
+    String backingDirPath = context.getString(BACKING_DIR);
+    Preconditions.checkState(backingDir != null, "Configuration must specify an existing directory for storing metadata");
+
+    backingDir = new File(backingDirPath);
+    Preconditions.checkState(backingDir.exists(), "Configuration must specify an existing backing directory");
 
     batchSize = context.getInteger(BATCH_SIZE, DEFAULT_BATCH_SIZE);
 
-    int capacity = 0;
-    String name = "abc";
-    String storeType = "Memory";
-    backingStore = MetadataBackingStoreFactory.get(storeType, capacity, name, context.getString(BACKING_STORE, DEFAULT_BACKING_STORE));
+    backingStore = MetadataBackingStoreFactory.get(context.getString(BACKING_STORE, DEFAULT_BACKING_STORE), bucketName, backingDir);
 
     deserializerType = context.getString(DESERIALIZER, DEFAULT_DESERIALIZER);
     deserializerContext = new Context(context.getSubProperties(DESERIALIZER + "."));
@@ -135,16 +135,16 @@ public class S3Source extends AbstractSource
 
     executor = Executors.newSingleThreadScheduledExecutor();
 
-    File directory = new File(backingDir);
     try {
 
       reader = new S3ObjectEventReader.Builder()
-              .backingDirectory(directory)
+              .backingDirectory(backingDir)
               .deserializerType(deserializerType)
               .deserializerContext(deserializerContext)
               .inputCharset(inputCharset)
               .decodeErrorPolicy(decodeErrorPolicy)
               .setS3Client(s3Client)
+              .backingStore(backingStore)
               .build();
     } catch (IOException ioe) {
       throw new FlumeException("Error instantiating spooling event parser",

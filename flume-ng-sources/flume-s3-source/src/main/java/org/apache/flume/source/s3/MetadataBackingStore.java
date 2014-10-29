@@ -9,11 +9,9 @@ import java.io.IOException;
  */
 
 abstract class MetadataBackingStore {
-  private final int capacity;
   private final String name;
 
-  protected MetadataBackingStore(int capacity, String name) {
-    this.capacity = capacity;
+  protected MetadataBackingStore(String name) {
     this.name = name;
   }
 
@@ -22,9 +20,6 @@ abstract class MetadataBackingStore {
   abstract boolean contains(String key);
   abstract void close() throws IOException;
 
-  int getCapacity() {
-    return capacity;
-  }
   String getName() {
     return name;
   }

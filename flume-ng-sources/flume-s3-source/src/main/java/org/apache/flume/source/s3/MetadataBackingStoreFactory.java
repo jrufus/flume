@@ -29,11 +29,11 @@ import java.io.RandomAccessFile;
 class MetadataBackingStoreFactory {
   private static final Logger LOG = LoggerFactory.getLogger(MetadataBackingStoreFactory.class);
   private MetadataBackingStoreFactory() {}
-  public static MetadataBackingStore get(String storeType, int capacity, String name, String metadataDir){
+  public static MetadataBackingStore get(String storeType, String name, File metadataDir){
     if(storeType.equals("Memory")) {
-      return new InMemoryMetadataBackingStore(capacity, name);
+      return new InMemoryMetadataBackingStore(name);
     } else if(storeType.equals("File")) {
-      return new FileBasedMetadataBackingStore(capacity, name, metadataDir);
+      return new FileBasedMetadataBackingStore(name, metadataDir);
     } else {
       throw new IllegalArgumentException();
     }

@@ -60,7 +60,7 @@ public class ResettableGenericInputStream extends ResettableInputStream
   private long position;
   private long syncPosition;
   private int maxCharWidth;
-  private int length;
+  private long length;
   private ByteArrayOutputStream markedBuffer;
   private boolean marked;
   private ByteBuffer buf;
@@ -104,7 +104,7 @@ public class ResettableGenericInputStream extends ResettableInputStream
    */
   public ResettableGenericInputStream(StreamCreator streamCreator,
                                       PositionTracker tracker, int bufSize, Charset charset,
-                                      DecodeErrorPolicy policy, int length) throws IOException {
+                                      DecodeErrorPolicy policy, long length) throws IOException {
     this.tracker = tracker;
     this.streamCreator = streamCreator;
     this.stream = streamCreator.create();

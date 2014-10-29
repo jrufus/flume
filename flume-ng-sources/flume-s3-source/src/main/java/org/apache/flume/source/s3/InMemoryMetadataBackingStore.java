@@ -10,8 +10,8 @@ import java.util.Set;
 public class InMemoryMetadataBackingStore extends MetadataBackingStore{
 
   Set set = new HashSet<String>();
-  public InMemoryMetadataBackingStore(int capacity, String name) {
-    super(capacity, name);
+  public InMemoryMetadataBackingStore(String name) {
+    super(name);
   }
 
   void remove(String key) {

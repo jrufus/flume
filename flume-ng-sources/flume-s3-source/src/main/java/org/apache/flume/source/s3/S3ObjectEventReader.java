@@ -98,6 +98,7 @@ public class S3ObjectEventReader  {
   private ObjectListing objListing;
   private ListIterator<S3ObjectSummary> objIter;
   private AmazonS3Client s3Client;
+  private MetadataBackingStore backingStore;
 
   /**
    * Create a S3ObjectEventReader to watch the given directory.
@@ -105,13 +106,15 @@ public class S3ObjectEventReader  {
   private S3ObjectEventReader(File backingDirectory, String bucketName,
                               String deserializerType,Context deserializerContext,
                               String inputCharset, DecodeErrorPolicy decodeErrorPolicy,
-                              AmazonS3Client s3Client) throws IOException {
+                              AmazonS3Client s3Client, MetadataBackingStore backingStore) throws IOException {
     // Sanity checks
     Preconditions.checkNotNull(backingDirectory);
     Preconditions.checkNotNull(deserializerType);
     Preconditions.checkNotNull(deserializerContext);
     Preconditions.checkNotNull(inputCharset);
     Preconditions.checkNotNull(s3Client);
+    Preconditions.checkNotNull(backingStore);
+
 
     if (logger.isDebugEnabled()) {
       logger.debug("Initializing {} with directory={}, metaDir={}, " +
@@ -150,6 +153,7 @@ public class S3ObjectEventReader  {
     this.decodeErrorPolicy = Preconditions.checkNotNull(decodeErrorPolicy);
 
     this.s3Client = s3Client;
+    this.backingStore = backingStore;
 
     File trackerDirectory = new File(backingDirectory, "tracker");
 
@@ -180,7 +184,7 @@ public class S3ObjectEventReader  {
     if (!lastFileRead.isPresent()) {
       return null;
     }
-    return lastFileRead.get().getFile().getAbsolutePath();
+    return lastFileRead.get().getKey();
   }
 
   // public interface
@@ -258,22 +262,13 @@ public class S3ObjectEventReader  {
   private void retireCurrentFile() throws IOException {
     Preconditions.checkState(currentFile.isPresent());
 
-    File fileToRoll = new File(currentFile.get().getFile().getAbsolutePath());
+    String key = currentFile.get().getKey();
 
     currentFile.get().getDeserializer().close();
 
-    // Verify that spooling assumptions hold
-    if (fileToRoll.lastModified() != currentFile.get().getLastModified()) {
-      String message = "File has been modified since being read: " + fileToRoll;
-      throw new IllegalStateException(message);
-    }
-    if (fileToRoll.length() != currentFile.get().getLength()) {
-      String message = "File has changed size since being read: " + fileToRoll;
-      throw new IllegalStateException(message);
-    }
-
+    backingStore.add(key);
     //
-    deleteCurrentFile(fileToRoll);
+    //deleteCurrentFile(fileToRoll); //TODO:Check if we need to do some equivalent of this
     /*if (deletePolicy.equalsIgnoreCase(DeletePolicy.NEVER.name())) {
       rollCurrentFile(fileToRoll);
     } else if (deletePolicy.equalsIgnoreCase(DeletePolicy.IMMEDIATE.name())) {
@@ -293,13 +288,13 @@ public class S3ObjectEventReader  {
    */
   private void deleteCurrentFile(File fileToDelete) throws IOException {
     logger.info("Preparing to delete file {}", fileToDelete);
-    if (!fileToDelete.exists()) {
-      logger.warn("Unable to delete nonexistent file: {}", fileToDelete);
-      return;
-    }
-    if (!fileToDelete.delete()) {
-      throw new IOException("Unable to delete spool file: " + fileToDelete);
-    }
+//    if (!fileToDelete.exists()) {
+//      logger.warn("Unable to delete nonexistent file: {}", fileToDelete);
+//      return;
+//    }
+//    if (!fileToDelete.delete()) {
+//      throw new IOException("Unable to delete spool file: " + fileToDelete);
+//    }
     // now we no longer need the meta file
     deleteMetaFile();
   }
@@ -309,7 +304,7 @@ public class S3ObjectEventReader  {
    * If the directory is empty or the chosen file is not readable,
    * this will return an absent option
    */
-  private Optional<FileInfo> getNextFile() {
+  private Optional<S3ObjectInfo> getNextFile() {
     if(objListing == null) {
       objListing = s3Client.listObjects(bucketName);
     }
@@ -320,6 +315,11 @@ public class S3ObjectEventReader  {
       //TODO : 1. get the object, check if its not processed and return it or call getNextFile()
       S3ObjectSummary objSummary = objIter.next();
       //TODO check if its not processed against MapDb
+      if(backingStore.contains(objSummary.getKey())) {
+        return getNextFile();
+      } else {
+        return openFile(objSummary);
+      }
       //if(yet to process)
         // return openFile(objSummary)
       //else
@@ -371,7 +371,7 @@ public class S3ObjectEventReader  {
 //    }
 //
 //    return openFile(selectedFile);
-    return null;
+    //return openFile(selectedFile);
   }
 
 
@@ -385,36 +385,36 @@ public class S3ObjectEventReader  {
 
     S3Object object = s3Client.getObject(bucketName, objSummary.getKey());
     S3ObjectInputStream is = object.getObjectContent();
-   try {
+    String key = objSummary.getKey();
+    try {
       // roll the meta file, if needed
-      String nextPath = objSummary.getKey();
       PositionTracker tracker =
-          DurablePositionTracker.getInstance(metaFile, nextPath);
-      if (!tracker.getTarget().equals(nextPath)) {
+          DurablePositionTracker.getInstance(metaFile, key);
+      if (!tracker.getTarget().equals(key)) {
         tracker.close();
         deleteMetaFile();
-        tracker = DurablePositionTracker.getInstance(metaFile, nextPath);
+        tracker = DurablePositionTracker.getInstance(metaFile, key);
       }
 
       // sanity check
-      Preconditions.checkState(tracker.getTarget().equals(nextPath),
+      Preconditions.checkState(tracker.getTarget().equals(key),
           "Tracker target %s does not equal expected filename %s",
-          tracker.getTarget(), nextPath);
+          tracker.getTarget(), key);
 
       ResettableInputStream in =
-          new ResettableGenericInputStream(new S3StreamCreator(conn, bucketName, nextPath), tracker,
+          new ResettableGenericInputStream(new S3StreamCreator(s3Client, bucketName, key), tracker,
                   ResettableGenericInputStream.DEFAULT_BUF_SIZE, inputCharset,
-              decodeErrorPolicy);
+              decodeErrorPolicy, objSummary.getSize());
       EventDeserializer deserializer = EventDeserializerFactory.getInstance
           (deserializerType, deserializerContext, in);
 
-      return Optional.of(new FileInfo(file, deserializer));
+      return Optional.of(new S3ObjectInfo(key, deserializer, objSummary.getSize()));
     } catch (FileNotFoundException e) {
       // File could have been deleted in the interim
-      logger.warn("Could not find file: " + file, e);
+      logger.warn("Could not find file: " + key, e);
       return Optional.absent();
     } catch (IOException e) {
-      logger.error("Exception opening file: " + file, e);
+      logger.error("Exception opening file: " + key, e);
       return Optional.absent();
     }
   }
@@ -458,6 +458,7 @@ public class S3ObjectEventReader  {
             S3SourceConfigurationConstants.DEFAULT_DECODE_ERROR_POLICY
             .toUpperCase(Locale.ENGLISH));
     private AmazonS3Client s3Client;
+    private MetadataBackingStore backingStore;
 
     public Builder setS3Client(AmazonS3Client s3Client) {
       this.s3Client = s3Client;
@@ -494,10 +495,15 @@ public class S3ObjectEventReader  {
       return this;
     }
 
+    public Builder backingStore(MetadataBackingStore backingStore) {
+      this.backingStore = backingStore;
+      return this;
+    }
+
     
     public S3ObjectEventReader build() throws IOException {
       return new S3ObjectEventReader(backingDirectory, bucketName, deserializerType,
-                 deserializerContext, inputCharset,  decodeErrorPolicy, s3Client);
+                 deserializerContext, inputCharset,  decodeErrorPolicy, s3Client, backingStore);
     }
   }
 
