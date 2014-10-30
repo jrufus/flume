@@ -306,7 +306,9 @@ public class S3ObjectEventReader  {
    */
   private Optional<S3ObjectInfo> getNextFile() {
     if(objListing == null) {
+      System.out.println("------- GETTING NEW LISTING :: ------");
       objListing = s3Client.listObjects(bucketName);
+      objIter = null;
     }
     if(objIter == null) {
       objIter = objListing.getObjectSummaries().listIterator();
@@ -329,6 +331,7 @@ public class S3ObjectEventReader  {
       objIter = null;
       return getNextFile();
     } else {
+      objListing = null;
       return Optional.absent();
     }
 

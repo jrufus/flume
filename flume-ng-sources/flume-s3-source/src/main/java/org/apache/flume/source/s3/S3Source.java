@@ -93,14 +93,14 @@ public class S3Source extends AbstractSource
     bucketName = context.getString(BUCKET_NAME);
     Preconditions.checkState(bucketName != null, "Configuration must specify a bucket Name");
 
-    accessKey = context.getString("ACCESS_KEY");
+    accessKey = context.getString(ACCESS_KEY);
     Preconditions.checkState(bucketName != null,  "Configuration must specify an access key Id");
 
     secretKey = context.getString(SECRET_KEY);
     Preconditions.checkState(bucketName != null, "Configuration must specify a secret key");
 
     String backingDirPath = context.getString(BACKING_DIR);
-    Preconditions.checkState(backingDir != null, "Configuration must specify an existing directory for storing metadata");
+    Preconditions.checkState(backingDirPath != null, "Configuration must specify an existing directory for storing metadata");
 
     backingDir = new File(backingDirPath);
     Preconditions.checkState(backingDir.exists(), "Configuration must specify an existing backing directory");
@@ -145,6 +145,7 @@ public class S3Source extends AbstractSource
               .decodeErrorPolicy(decodeErrorPolicy)
               .setS3Client(s3Client)
               .backingStore(backingStore)
+              .bucket(bucketName)
               .build();
     } catch (IOException ioe) {
       throw new FlumeException("Error instantiating spooling event parser",

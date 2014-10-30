@@ -30,12 +30,12 @@ class MetadataBackingStoreFactory {
   private static final Logger LOG = LoggerFactory.getLogger(MetadataBackingStoreFactory.class);
   private MetadataBackingStoreFactory() {}
   public static MetadataBackingStore get(String storeType, String name, File metadataDir){
-    if(storeType.equals("Memory")) {
+    if(storeType.equals("memory")) {
       return new InMemoryMetadataBackingStore(name);
-    } else if(storeType.equals("File")) {
+    } else if(storeType.equals("file")) {
       return new FileBasedMetadataBackingStore(name, metadataDir);
     } else {
-      throw new IllegalArgumentException();
+      throw new IllegalArgumentException(storeType);
     }
   }
 }

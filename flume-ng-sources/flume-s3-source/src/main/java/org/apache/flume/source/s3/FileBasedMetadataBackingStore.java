@@ -15,7 +15,7 @@ import java.util.Set;
 public class FileBasedMetadataBackingStore extends MetadataBackingStore {
 
   Set set = new HashSet<String>();
-  public FileBasedMetadataBackingStore(String name, File backingDir) throws IOException {
+  public FileBasedMetadataBackingStore(String name, File backingDir) {
     super(name);
     // Verify directory exists and is readable/writable
     Preconditions.checkState(backingDir.exists(),
