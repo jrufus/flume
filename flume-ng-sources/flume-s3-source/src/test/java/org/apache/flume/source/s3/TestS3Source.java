@@ -107,7 +107,7 @@ public class TestS3Source {
     source.setBackOff(false);
 
     File file = new File("/Users/jrufus/dev");
-    source.setS3Client(new TestAmazonS3Client());
+    source.setS3Client(new TestAmazonS3Client(tmpDir.getAbsolutePath()));
     source.start();
 
     List<String> dataOut = Lists.newArrayList();
@@ -125,6 +125,8 @@ public class TestS3Source {
 
     tx.commit();
     tx.close();
+    if(i == 150)
+      break;
 //    if(e == null) {
 //      System.out.println("------------- BREAKING -------------------  " + i);
 //      break;
@@ -136,8 +138,38 @@ public class TestS3Source {
 //      Thread.sleep(30000);
 //    }
   }
-//  Assert.assertTrue("Expected to hit ChannelException, but did not!",
-//            source.hitChannelException());
+  source.stop();
+
+    System.out.println("------------- STOPPED \n \n \n -------------------  " + i);
+  source.start();
+    while(true) {
+      System.out.println("------------- i -------------------  " + i);
+      Transaction tx = channel.getTransaction();
+      tx.begin();
+      Event e = channel.take();
+      if (e != null) {
+        dataOut.add(new String(e.getBody(), "UTF-8"));
+        i++;
+        System.out.println(new String(e.getBody(), "UTF-8"));
+      }
+
+      tx.commit();
+      tx.close();
+      if(i == 150)
+        break;
+//    if(e == null) {
+//      System.out.println("------------- BREAKING -------------------  " + i);
+//      break;
+//    }
+//    if(e == null && i > 50)
+//      break;
+//    else if(e == null){
+//      System.out.println("ABOUT TO SLEEP - -------------------");
+//      Thread.sleep(30000);
+//    }
+    }
+
+
 //  Assert.assertEquals(8, dataOut.size());
     //source.stop();
   }
@@ -330,16 +362,22 @@ public class TestS3Source {
 
 class TestAmazonS3Client extends AmazonS3Client {
 
+  String parentDir;
+
+  TestAmazonS3Client(String parentDir) {
+    this.parentDir = parentDir;
+  }
+
   @Override
-  public TestObjectListing listObjects(String dirName) {
-    File dir = new File(new File("/Users/jrufus/dev/"), dirName);
+  public TestObjectListing listObjects(String bucketName) {
+    File dir = new File(parentDir, bucketName);
     File[] files = dir.listFiles();
     return new TestObjectListing(files);
   }
 
   @Override
-  public TestS3Object getObject(String dirName, String  fileName) {
-    File dir = new File(new File("/Users/jrufus/dev/"), dirName);
+  public TestS3Object getObject(String bucketName, String  fileName) {
+    File dir = new File(parentDir, bucketName);
     File[] files = dir.listFiles();
     for(File file: files) {
       if(file.getName().equals(fileName))
