@@ -188,6 +188,11 @@ public class S3Source extends AbstractSource
     return hasFatalError;
   }
 
+  @VisibleForTesting
+  public void setS3Client(AmazonS3Client s3Client) {
+    this.s3Client = s3Client;
+  }
+
 
 
   /**
