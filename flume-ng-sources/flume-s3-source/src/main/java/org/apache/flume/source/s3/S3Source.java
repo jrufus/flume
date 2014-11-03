@@ -18,12 +18,11 @@ package org.apache.flume.source.s3;
 
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.BasicAWSCredentials;
-import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3Client;
-import com.amazonaws.services.s3.model.*;
-import com.amazonaws.util.StringUtils;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Throwables;
+import com.google.common.base.Preconditions;
+
 import org.apache.flume.*;
 import org.apache.flume.conf.Configurable;
 import org.apache.flume.instrumentation.SourceCounter;
@@ -32,12 +31,6 @@ import org.apache.flume.source.AbstractSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.base.Preconditions;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
@@ -45,10 +38,6 @@ import java.util.Locale;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-
-
-import org.mapdb.DB;
-import org.mapdb.DBMaker;
 
 import static org.apache.flume.source.s3.S3SourceConfigurationConstants.*;
 
@@ -62,14 +51,11 @@ public class S3Source extends AbstractSource
 
   private static final Logger logger = LoggerFactory.getLogger(S3Source.class);
 // Delay used when polling for new files
-  private static final int POLL_DELAY_MS = 5000; //TODO: see if this is fine, for spooling dir source this is 500ms
+  private static final int POLL_DELAY_MS = 1000; //TODO: see if this is fine, for spooling dir source this is 500ms
 
   /* Config options */
   private String bucketName;
   private int batchSize;
-  private String accessKey;
-  private String secretKey;
-  private String endPoint;
   private File backingDir;
   private MetadataBackingStore backingStore;
 
@@ -89,6 +75,9 @@ public class S3Source extends AbstractSource
 
   @Override
   public synchronized void configure(Context context) {
+    String accessKey;
+    String secretKey;
+    String endPoint;
 
     bucketName = context.getString(BUCKET_NAME);
     Preconditions.checkState(bucketName != null, "Configuration must specify a bucket Name");
@@ -123,6 +112,7 @@ public class S3Source extends AbstractSource
 
     AWSCredentials credentials = new BasicAWSCredentials(accessKey, secretKey );
     s3Client = new AmazonS3Client(credentials);
+    endPoint = context.getString(END_POINT);
     if(endPoint != null) {
       s3Client.setEndpoint(endPoint);
     }
@@ -148,7 +138,7 @@ public class S3Source extends AbstractSource
               .bucket(bucketName)
               .build();
     } catch (IOException ioe) {
-      throw new FlumeException("Error instantiating spooling event parser",
+      throw new FlumeException("Error instantiating s3 event parser",
               ioe);
     }
 
@@ -157,7 +147,7 @@ public class S3Source extends AbstractSource
             runner, 0, POLL_DELAY_MS, TimeUnit.MILLISECONDS);
 
     super.start();
-    logger.debug("SpoolDirectorySource source started");
+    logger.debug("S3Source source started");
     sourceCounter.start();
   }
 
@@ -173,7 +163,7 @@ public class S3Source extends AbstractSource
 
     super.stop();
     sourceCounter.stop();
-    logger.info("SpoolDir source {} stopped. Metrics: {}", getName(),
+    logger.info("S3 source {} stopped. Metrics: {}", getName(),
             sourceCounter);
   }
 
@@ -192,8 +182,6 @@ public class S3Source extends AbstractSource
   public void setS3Client(AmazonS3Client s3Client) {
     this.s3Client = s3Client;
   }
-
-
 
   /**
    * The class always backs off, this exists only so that we can test without
@@ -268,26 +256,26 @@ public class S3Source extends AbstractSource
     }
   }
 
-  public void connectToS3() {
-    AWSCredentials credentials = new BasicAWSCredentials("AKIAIACMXFTEW2G2JLMQ", "dlE3nACto1tA+3V2m92vXhHxvwCeZZVsTHgAprqn");
-    AmazonS3 conn = new AmazonS3Client(credentials);
-    if(endPoint != null) {
-      conn.setEndpoint(endPoint);
-    }
-    String bucketName = "jrufusbucket1";
-    ObjectListing listing = conn.listObjects(bucketName);
-    List<S3ObjectSummary> summaries = listing.getObjectSummaries();
-    for(S3ObjectSummary summary : summaries) {
-      String key = summary.getKey();
-      System.out.println(key);
-      S3Object object = conn.getObject(bucketName, summary.getKey());
-      S3ObjectInputStream is = object.getObjectContent();
-      BufferedInputStream bis = new BufferedInputStream(is);
-      System.out.println("---- mark supported-----" + bis.markSupported());
-    }
-  }
-
-  public static void main(String[] args) {
-    new S3Source().connectToS3();
-  }
+//  public void connectToS3() {
+//    AWSCredentials credentials = new BasicAWSCredentials("AKIAIACMXFTEW2G2JLMQ", "dlE3nACto1tA+3V2m92vXhHxvwCeZZVsTHgAprqn");
+//    AmazonS3 conn = new AmazonS3Client(credentials);
+//    if(endPoint != null) {
+//      conn.setEndpoint(endPoint);
+//    }
+//    String bucketName = "jrufusbucket1";
+//    ObjectListing listing = conn.listObjects(bucketName);
+//    List<S3ObjectSummary> summaries = listing.getObjectSummaries();
+//    for(S3ObjectSummary summary : summaries) {
+//      String key = summary.getKey();
+//      System.out.println(key);
+//      S3Object object = conn.getObject(bucketName, summary.getKey());
+//      S3ObjectInputStream is = object.getObjectContent();
+//      BufferedInputStream bis = new BufferedInputStream(is);
+//      System.out.println("---- mark supported-----" + bis.markSupported());
+//    }
+//  }
+//
+//  public static void main(String[] args) {
+//    new S3Source().connectToS3();
+//  }
 }
