@@ -40,8 +40,13 @@
     </dependency>
     <dependency>
       <groupId>com.amazonaws</groupId>
-      <artifactId>aws-java-sdk</artifactId>
-      <version>1.9.0</version>
+      <artifactId>aws-java-sdk-s3</artifactId>
+      <version>1.9.3</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.httpcomponents</groupId>
+      <artifactId>httpcore</artifactId>
+      <version>4.2.3</version>
     </dependency>
     <dependency>
       <groupId>org.mapdb</groupId>

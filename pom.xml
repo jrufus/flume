@@ -339,7 +339,7 @@ limitations under the License.
         <activeByDefault>false</activeByDefault>
       </activation>
       <properties>
-        <thrift.executable>${env.THRIFT_HOME}/bin/thrift</thrift.executable>
+        <thrift.executable>${vim env.THRIFT_HOME}/bin/thrift</thrift.executable>
       </properties>
     </profile>
 
