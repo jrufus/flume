@@ -223,15 +223,12 @@ public class ResettableGenericInputStream extends ResettableInputStream
 
   private void refillBuf() throws IOException {
     //int prevSize = buf.remaining();
-    System.out.println("Insid refillbuff ----  remaining: "+buf.hasRemaining()+" --- position -- "+this.position+" limit -- "+buf.limit()+"  -- buf.position() -- "+buf.position());
+    //System.out.println("Insid refillbuff ----  remaining: "+buf.hasRemaining()+" --- position -- "+this.position+" limit -- "+buf.limit()+"  -- buf.position() -- "+buf.position());
     int currPos = buf.position();
     int currLimit = buf.limit();
     int remaining = buf.remaining();
-    assert buf.remaining() == currLimit - currPos;
-
+    //assert buf.remaining() == currLimit - currPos;
     //int processedSize = buf.remaining() - prevSize;
-
-
 
     if(marked && currPos > 0) {
       byte[] processedBuf = new byte[currPos];
@@ -350,7 +347,7 @@ public class ResettableGenericInputStream extends ResettableInputStream
   public long tell() throws IOException {
     logger.trace("Tell position: {}", syncPosition);
 
-    return position;
+    return syncPosition;
   }
 
   @Override

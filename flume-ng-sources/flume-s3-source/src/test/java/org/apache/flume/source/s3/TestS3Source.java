@@ -82,7 +82,7 @@ public class TestS3Source {
     tmpDir.delete();
   }
 
-  //@Test
+  @Test
   public void testS3SourceOneFile() throws Exception {
 
     channel.start();
@@ -148,18 +148,18 @@ public class TestS3Source {
 
     tx.commit();
     tx.close();
-    if(i == 150)
+//    if(i == 150)
+//      break;
+    if(e == null) {
+      System.out.println("------------- BREAKING -------------------  " + i);
       break;
-//    if(e == null) {
-//      System.out.println("------------- BREAKING -------------------  " + i);
-//      break;
-//    }
-//    if(e == null && i > 50)
-//      break;
-//    else if(e == null){
-//      System.out.println("ABOUT TO SLEEP - -------------------");
-//      Thread.sleep(30000);
-//    }
+    }
+    if(e == null && i > 50) {
+      break;
+    } else if(e == null) {
+      System.out.println("ABOUT TO SLEEP - -------------------");
+      Thread.sleep(30000);
+    }
   }
   source.stop();
   channel.stop();
@@ -368,7 +368,7 @@ public class TestS3Source {
 
 
 
-  @Test
+  //@Test
   public void testPutFilenameHeader() throws IOException, InterruptedException {
     Context context = new Context();
     String bucketName = "filesbucket";
@@ -405,7 +405,7 @@ public class TestS3Source {
     txn.close();
   }
 
-  @Test
+  //@Test
   public void testPutBasenameHeader() throws IOException,
     InterruptedException {
     Context context = new Context();

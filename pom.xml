@@ -1033,7 +1033,7 @@ limitations under the License.
       <dependency>
         <groupId>joda-time</groupId>
         <artifactId>joda-time</artifactId>
-        <version>2.1</version>
+        <version>2.2</version>
       </dependency>
       <!-- Adding zookeeper as dependency, beacuse it was
            pulling different version of zookeeper as transient

@@ -23,11 +23,13 @@ import java.io.*;
 import java.nio.charset.Charset;
 
 public class TestResettableGenericInputStream extends TestResettableFileInputStream{
+  @Override
   public ResettableInputStream getResettableInputStream(File file, PositionTracker tracker)
           throws IOException {
     return new ResettableGenericInputStream(new FileStreamCreator(file), tracker, (int)file.length());
   }
 
+  @Override
   public ResettableInputStream getResettableInputStream(File file, PositionTracker tracker,
           int bufSize, Charset charset, DecodeErrorPolicy policy)
           throws IOException {
