@@ -139,7 +139,7 @@ public class ResettableGenericInputStream extends ResettableInputStream
     }
     decoder.onMalformedInput(errorAction);
     decoder.onUnmappableCharacter(errorAction);
-
+    System.out.println("========================== INITIALIZIG POS FROM< TRACKER=========================");
     seek(tracker.getPosition());
   }
 
@@ -274,6 +274,7 @@ public class ResettableGenericInputStream extends ResettableInputStream
     markedBuffer.reset();
     buf.compact();
     buf.flip();
+    System.out.println("------------------------ MARKED @ -------------"+tell());
     marked = true;
   }
 
@@ -352,6 +353,7 @@ public class ResettableGenericInputStream extends ResettableInputStream
 
   @Override
   public synchronized void seek(long newPos) throws IOException {
+    System.out.println("SEEKING TO --------------------------------------------------------- "+ newPos);
     logger.trace("Seek to position: {}", newPos);
 
     // check to see if we can seek within our existing buffer
