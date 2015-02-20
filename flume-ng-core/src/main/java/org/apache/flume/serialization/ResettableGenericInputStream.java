@@ -139,7 +139,6 @@ public class ResettableGenericInputStream extends ResettableInputStream
     }
     decoder.onMalformedInput(errorAction);
     decoder.onUnmappableCharacter(errorAction);
-    System.out.println("========================== INITIALIZIG POS FROM< TRACKER=========================");
     seek(tracker.getPosition());
   }
 
