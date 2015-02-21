@@ -92,7 +92,7 @@ public class TestAvroSource {
     source.setChannelProcessor(new ChannelProcessor(rcs));
   }
 
-  //@Test
+  @Test
   public void testLifecycle() throws InterruptedException {
     boolean bound = false;
 
@@ -128,43 +128,43 @@ public class TestAvroSource {
         source.getLifecycleState());
   }
 
-  //@Test
+  @Test
   public void testRequestWithNoCompression() throws InterruptedException, IOException {
 
     doRequest(false, false, 6);
   }
 
-  //@Test
+  @Test
   public void testRequestWithCompressionOnClientAndServerOnLevel0() throws InterruptedException, IOException {
 
     doRequest(true, true, 0);
   }
 
-  //@Test
+  @Test
   public void testRequestWithCompressionOnClientAndServerOnLevel1() throws InterruptedException, IOException {
 
     doRequest(true, true, 1);
   }
 
-  //@Test
+  @Test
   public void testRequestWithCompressionOnClientAndServerOnLevel6() throws InterruptedException, IOException {
 
     doRequest(true, true, 6);
   }
 
-  //@Test
+  @Test
   public void testRequestWithCompressionOnClientAndServerOnLevel9() throws InterruptedException, IOException {
 
     doRequest(true, true, 9);
   }
 
-  //@Test(expected=org.apache.avro.AvroRemoteException.class)
+  @Test(expected=org.apache.avro.AvroRemoteException.class)
   public void testRequestWithCompressionOnServerOnly() throws InterruptedException, IOException {
     //This will fail because both client and server need compression on
     doRequest(true, false, 6);
   }
 
-  //@Test(expected=org.apache.avro.AvroRemoteException.class)
+  @Test(expected=org.apache.avro.AvroRemoteException.class)
   public void testRequestWithCompressionOnClientOnly() throws InterruptedException, IOException {
     //This will fail because both client and server need compression on
     doRequest(false, true, 6);
@@ -276,39 +276,39 @@ public class TestAvroSource {
   public void testSslRequest() throws InterruptedException, IOException {
     boolean bound = false;
 
-//    for (int i = 0; i < 10 && !bound; i++) {
-//      try {
-//        Context context = new Context();
-//
-//        context.put("port", String.valueOf(selectedPort = 41414 + i));
-//        context.put("bind", "0.0.0.0");
-//        context.put("ssl", "true");
-//        context.put("keystore", "src/test/resources/server.p12");
-//        context.put("keystore-password", "password");
-//        context.put("keystore-type", "PKCS12");
-//
-//        Configurables.configure(source, context);
-//
-//        source.start();
-//        bound = true;
-//      } catch (ChannelException e) {
-//        /*
-//         * NB: This assume we're using the Netty server under the hood and the
-//         * failure is to bind. Yucky.
-//         */
-//        Thread.sleep(100);
-//      }
-//    }
-//
-//    Assert
-//        .assertTrue("Reached start or error", LifecycleController.waitForOneOf(
-//            source, LifecycleState.START_OR_ERROR));
-//    Assert.assertEquals("Server is started", LifecycleState.START,
-//        source.getLifecycleState());
+    for (int i = 0; i < 10 && !bound; i++) {
+      try {
+        Context context = new Context();
+
+        context.put("port", String.valueOf(selectedPort = 41414 + i));
+        context.put("bind", "0.0.0.0");
+        context.put("ssl", "true");
+        context.put("keystore", "src/test/resources/server.p12");
+        context.put("keystore-password", "password");
+        context.put("keystore-type", "PKCS12");
+
+        Configurables.configure(source, context);
+
+        source.start();
+        bound = true;
+      } catch (ChannelException e) {
+        /*
+         * NB: This assume we're using the Netty server under the hood and the
+         * failure is to bind. Yucky.
+         */
+        Thread.sleep(100);
+      }
+    }
+
+    Assert
+        .assertTrue("Reached start or error", LifecycleController.waitForOneOf(
+            source, LifecycleState.START_OR_ERROR));
+    Assert.assertEquals("Server is started", LifecycleState.START,
+        source.getLifecycleState());
 
     AvroSourceProtocol client = SpecificRequestor.getClient(
         AvroSourceProtocol.class, new NettyTransceiver(new InetSocketAddress(
-        "jrufus-flumetest.ent.cloudera.com", 41414), new SSLChannelFactory()));
+        selectedPort), new SSLChannelFactory()));
 
     AvroFlumeEvent avroEvent = new AvroFlumeEvent();
 
@@ -317,25 +317,25 @@ public class TestAvroSource {
 
     Status status = client.append(avroEvent);
 
-//    Assert.assertEquals(Status.OK, status);
-//
-//    Transaction transaction = channel.getTransaction();
-//    transaction.begin();
-//
-//    Event event = channel.take();
-//    Assert.assertNotNull(event);
-//    Assert.assertEquals("Channel contained our event", "Hello avro ssl",
-//        new String(event.getBody()));
-//    transaction.commit();
-//    transaction.close();
-//
-//    logger.debug("Round trip event:{}", event);
-//
-//    source.stop();
-//    Assert.assertTrue("Reached stop or error",
-//        LifecycleController.waitForOneOf(source, LifecycleState.STOP_OR_ERROR));
-//    Assert.assertEquals("Server is stopped", LifecycleState.STOP,
-//        source.getLifecycleState());
+    Assert.assertEquals(Status.OK, status);
+
+    Transaction transaction = channel.getTransaction();
+    transaction.begin();
+
+    Event event = channel.take();
+    Assert.assertNotNull(event);
+    Assert.assertEquals("Channel contained our event", "Hello avro ssl",
+        new String(event.getBody()));
+    transaction.commit();
+    transaction.close();
+
+    logger.debug("Round trip event:{}", event);
+
+    source.stop();
+    Assert.assertTrue("Reached stop or error",
+        LifecycleController.waitForOneOf(source, LifecycleState.STOP_OR_ERROR));
+    Assert.assertEquals("Server is stopped", LifecycleState.STOP,
+        source.getLifecycleState());
   }
 
   /**
@@ -385,7 +385,7 @@ public class TestAvroSource {
     }
   }
 
-  //@Test
+  @Test
   public void testValidIpFilterAllows()
       throws InterruptedException, IOException {
     doIpFilterTest(localhost, "allow:name:localhost,deny:ip:*", true, false);
@@ -402,7 +402,7 @@ public class TestAvroSource {
     doIpFilterTest(localhost, "allow:ip:*", true, true);
   }
 
-  //@Test
+  @Test
   public void testValidIpFilterDenys()
       throws InterruptedException, IOException {
     doIpFilterTest(localhost, "deny:ip:*", false, false);
@@ -417,7 +417,7 @@ public class TestAvroSource {
     doIpFilterTest(localhost, "deny:ip:*", false, true);
   }
 
-  //@Test
+  @Test
   public void testInvalidIpFilter() throws InterruptedException, IOException {
     doIpFilterTest(localhost, "deny:ip:*", false, false);
     doIpFilterTest(localhost, "allow:name:localhost", true, false);
