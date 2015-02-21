@@ -28,8 +28,8 @@ import java.util.HashSet;
 import java.util.Set;
 
 public class FileBasedMetadataBackingStore extends MetadataBackingStore {
-
-  Set set = new HashSet<String>();
+  private DB db;
+  private Set<String> set;
   public FileBasedMetadataBackingStore(String name, File backingDir) {
     super(name);
     // Verify directory exists and is readable/writable
@@ -39,26 +39,30 @@ public class FileBasedMetadataBackingStore extends MetadataBackingStore {
             "Path is not a directory: " + backingDir.getAbsolutePath());
 
     File dbFile = new File(backingDir, name + ".db");
-    DB db = DBMaker.newFileDB(dbFile)
+    db = DBMaker.newFileDB(dbFile)
             .closeOnJvmShutdown()
             //.cacheSize() TODO: Investigate this option
             .mmapFileEnableIfSupported()
             .make();
-    set = db.createHashSet("MapDBSet " + " - " + name).make();
+    set = db.getHashSet("MapDBSet " + " - " + name);
+    System.out.println(" ------------ Set contents " + set);
   }
 
   void remove(String key) {
     set.remove(key);
+    db.commit();
   }
 
   void add(String key) {
     set.add(key);
+    db.commit();
   }
 
   boolean contains(String key) {
     return set.contains(key);
   }
 
-  void close() throws IOException {}
-  
+  void close() throws IOException {
+    db.close();
+  }
 }

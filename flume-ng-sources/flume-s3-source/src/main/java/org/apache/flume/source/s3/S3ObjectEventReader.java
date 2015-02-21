@@ -35,6 +35,7 @@ import org.apache.flume.Event;
 import org.apache.flume.FlumeException;
 import org.apache.flume.annotations.InterfaceAudience;
 import org.apache.flume.annotations.InterfaceStability;
+import org.apache.flume.client.avro.ReliableEventReader;
 import org.apache.flume.serialization.*;
 
 import org.slf4j.Logger;
@@ -47,39 +48,27 @@ import java.nio.charset.Charset;
 import java.util.*;
 
 /**
- * <p/>A {@link org.apache.flume.client.avro.ReliableEventReader} which reads log data from files stored
- * in a spooling directory and renames each file once all of its data has been
- * read (through {@link org.apache.flume.serialization.EventDeserializer#readEvent()} calls). The user must
- * {@link #commit()} each read, to indicate that the lines have been fully
- * processed.
- * <p/>Read calls will return no data if there are no files left to read. This
+ * <p/>A {@link org.apache.flume.source.s3.S3ObjectEventReader} which reads log data from files stored
+ * in a S3 Bucket and reads (through {@link org.apache.flume.serialization.EventDeserializer#readEvent()} calls).
+ * The user must {@link #commit()} each read, to indicate that the lines have been fully
+ * processed.  <p/>Read calls will return no data if there are no files left to read. This
  * class, in general, is not thread safe.
  *
  * <p/>This reader assumes that files with unique file names are left in the
- * spooling directory and not modified once they are placed there. Any user
+ * S3 Bucket and not modified once they are placed there. Any user
  * behavior which violates these assumptions, when detected, will result in a
  * FlumeException being thrown.
  *
- * <p/>This class makes the following guarantees, if above assumptions are met:
- * <ul>
- * <li> Once a log file has been renamed with the completedSuffix,
- *      all of its records have been read through the
- *      {@link org.apache.flume.serialization.EventDeserializer#readEvent()} function and
- *      {@link #commit()}ed at least once.
- * <li> All files in the spooling directory will eventually be opened
- *      and delivered to a {@link #readEvents(int)} caller.
- * </ul>
  */
 @InterfaceAudience.Private
 @InterfaceStability.Evolving
-public class S3ObjectEventReader  {
+public class S3ObjectEventReader implements ReliableEventReader {
 
   private static final Logger logger = LoggerFactory
       .getLogger(S3ObjectEventReader.class);
 
   static final String metaFileName = ".flumes3-main.meta";
 
-  private final File backingDirectory;
   private final String bucketName;
   private final String deserializerType;
   private final Context deserializerContext;
@@ -92,8 +81,6 @@ public class S3ObjectEventReader  {
   private Optional<S3ObjectInfo> lastFileRead = Optional.absent();
   private boolean committed = true;
 
-  /** Instance var to Cache directory listing **/
-  private Iterator<File> candidateFileIter = null;
   private int listFilesCount = 0;
   private ObjectListing objListing;
   private ListIterator<S3ObjectSummary> objIter;
@@ -144,7 +131,6 @@ public class S3ObjectEventReader  {
           " in the spooling directory: " + backingDirectory, e);
     }
 
-    this.backingDirectory = backingDirectory;
     this.bucketName = bucketName;
     this.deserializerType = deserializerType;
     this.deserializerContext = deserializerContext;
@@ -235,6 +221,7 @@ public class S3ObjectEventReader  {
     return events;
   }
 
+  @Override
   public void close() throws IOException {
     if (currentFile.isPresent()) {
       currentFile.get().getDeserializer().close();
@@ -251,52 +238,16 @@ public class S3ObjectEventReader  {
   }
 
   /**
-   * Closes currentFile and attempt to rename it.
+   * Closes currentFile
    *
    * If these operations fail in a way that may cause duplicate log entries,
-   * an error is logged but no exceptions are thrown. If these operations fail
-   * in a way that indicates potential misuse of the spooling directory, a
-   * FlumeException will be thrown.
-   * @throws org.apache.flume.FlumeException if files do not conform to spooling assumptions
+   * an error is logged but no exceptions are thrown.
    */
   private void retireCurrentFile() throws IOException {
     Preconditions.checkState(currentFile.isPresent());
-
     String key = currentFile.get().getKey();
-
     currentFile.get().getDeserializer().close();
-
     backingStore.add(key);
-    //
-    //deleteCurrentFile(fileToRoll); //TODO:Check if we need to do some equivalent of this
-    /*if (deletePolicy.equalsIgnoreCase(DeletePolicy.NEVER.name())) {
-      rollCurrentFile(fileToRoll);
-    } else if (deletePolicy.equalsIgnoreCase(DeletePolicy.IMMEDIATE.name())) {
-      deleteCurrentFile(fileToRoll);
-    } else {
-      // TODO: implement delay in the future
-      throw new IllegalArgumentException("Unsupported delete policy: " +
-          deletePolicy);
-    }*/
-  }
-
-
-  /**
-   * Delete the given spooled file
-   * @param fileToDelete
-   * @throws java.io.IOException
-   */
-  private void deleteCurrentFile(File fileToDelete) throws IOException {
-    logger.info("Preparing to delete file {}", fileToDelete);
-//    if (!fileToDelete.exists()) {
-//      logger.warn("Unable to delete nonexistent file: {}", fileToDelete);
-//      return;
-//    }
-//    if (!fileToDelete.delete()) {
-//      throw new IOException("Unable to delete spool file: " + fileToDelete);
-//    }
-    // now we no longer need the meta file
-    deleteMetaFile();
   }
 
   /**
@@ -306,7 +257,7 @@ public class S3ObjectEventReader  {
    */
   private Optional<S3ObjectInfo> getNextFile() {
     if(objListing == null) {
-      System.out.println("------- GETTING NEW LISTING :: ------");
+      logger.debug("Getting new listing");
       objListing = s3Client.listObjects(bucketName);
       objIter = null;
     }
@@ -314,18 +265,13 @@ public class S3ObjectEventReader  {
       objIter = objListing.getObjectSummaries().listIterator();
     }
     if(objIter.hasNext()) {
-      //TODO : 1. get the object, check if its not processed and return it or call getNextFile()
       S3ObjectSummary objSummary = objIter.next();
-      //TODO check if its not processed against MapDb
       if(backingStore.contains(objSummary.getKey())) {
+        System.out.println("----------- Backing Store has ---- "+objSummary.getKey());
         return getNextFile();
       } else {
         return openFile(objSummary);
       }
-      //if(yet to process)
-        // return openFile(objSummary)
-      //else
-           //return getNextFile();
     } else if(objListing.isTruncated()) {
       objListing = s3Client.listNextBatchOfObjects(objListing);
       objIter = null;
@@ -334,47 +280,6 @@ public class S3ObjectEventReader  {
       objListing = null;
       return Optional.absent();
     }
-
-
-
-//    List<File> candidateFiles = Collections.emptyList();
-//
-//      candidateFiles = Arrays.asList(spoolDirectory.listFiles(filter));
-//      listFilesCount++;
-//      candidateFileIter = candidateFiles.iterator();
-//    }
-//
-//    if (!candidateFileIter.hasNext()) { // No matching file in spooling directory.
-//      return Optional.absent();
-//    }
-//
-//    File selectedFile = candidateFileIter.next();
-//    if (consumeOrder == ConsumeOrder.RANDOM) { // Selected file is random.
-//      return openFile(selectedFile);
-//    } else if (consumeOrder == ConsumeOrder.YOUNGEST) {
-//      for (File candidateFile: candidateFiles) {
-//        long compare = selectedFile.lastModified() -
-//            candidateFile.lastModified();
-//        if (compare == 0) { // ts is same pick smallest lexicographically.
-//          selectedFile = smallerLexicographical(selectedFile, candidateFile);
-//        } else if (compare < 0) { // candidate is younger (cand-ts > selec-ts)
-//          selectedFile = candidateFile;
-//        }
-//      }
-//    } else { // default order is OLDEST
-//      for (File candidateFile: candidateFiles) {
-//        long compare = selectedFile.lastModified() -
-//            candidateFile.lastModified();
-//        if (compare == 0) { // ts is same pick smallest lexicographically.
-//          selectedFile = smallerLexicographical(selectedFile, candidateFile);
-//        } else if (compare > 0) { // candidate is older (cand-ts < selec-ts).
-//          selectedFile = candidateFile;
-//        }
-//      }
-//    }
-//
-//    return openFile(selectedFile);
-    //return openFile(selectedFile);
   }
 
 
@@ -395,6 +300,7 @@ public class S3ObjectEventReader  {
           DurablePositionTracker.getInstance(metaFile, key);
       if (!tracker.getTarget().equals(key)) {
         tracker.close();
+        System.out.println("Deleting META FILE -------------------------");
         deleteMetaFile();
         tracker = DurablePositionTracker.getInstance(metaFile, key);
       }

@@ -109,7 +109,8 @@ public class ResettableGenericInputStream extends ResettableInputStream
     this.streamCreator = streamCreator;
     this.stream = streamCreator.create();
     this.buf = ByteBuffer.wrap(new byte[bufSize]);
-    System.out.println("processedSize ----"+buf.position()+"  "+buf.hasRemaining()+" --- "+buf.capacity()+"  "+buf.limit());
+    logger.debug("Buffer position - " + buf.position() + " hasRemaining - "+ buf.hasRemaining() +
+            " Buffer Capacity - " + buf.capacity() + " Buffer Limit - " + buf.limit());
     buf.flip();
     this.byteBuf = new byte[1]; // single byte
     this.charBuf = CharBuffer.allocate(1); // single char
@@ -139,6 +140,9 @@ public class ResettableGenericInputStream extends ResettableInputStream
     }
     decoder.onMalformedInput(errorAction);
     decoder.onUnmappableCharacter(errorAction);
+    System.out.println("----------------------------------------");
+    System.out.println("STARTING ON ------- FILE --- " + tracker.getTarget()
+            + "@ POSITION -----------------------"+tracker.getPosition());
     seek(tracker.getPosition());
   }
 
@@ -162,11 +166,9 @@ public class ResettableGenericInputStream extends ResettableInputStream
     if (position >= fileSize) {
       return -1;
     }
-
     if (!buf.hasRemaining()) {
       refillBuf();
     }
-
     int rem = buf.remaining();
     if (len > rem) {
       len = rem;
@@ -182,9 +184,7 @@ public class ResettableGenericInputStream extends ResettableInputStream
     // This check ensures that there are at least maxCharWidth bytes in the buffer
     // before reaching EOF.
     if (buf.remaining() < maxCharWidth) {
-      System.out.println("buf.remaining() < maxCharWidth  "+ buf.remaining() +" --- "+ maxCharWidth);
-      //buf.clear();
-      //buf.flip();
+     logger.debug("buf.remaining() < maxCharWidth  "+ buf.remaining() +" - "+ maxCharWidth);
       refillBuf();
     }
 
@@ -220,13 +220,17 @@ public class ResettableGenericInputStream extends ResettableInputStream
 
   }
 
+  private void printBufferState() {
+    logger.debug("Buffer - remaining: "+buf.hasRemaining()+" position - "+
+            this.position+" limit - "+buf.limit()+" buf.position() - "+buf.position());
+  }
+
   private void refillBuf() throws IOException {
-    //int prevSize = buf.remaining();
-    //System.out.println("Insid refillbuff ----  remaining: "+buf.hasRemaining()+" --- position -- "+this.position+" limit -- "+buf.limit()+"  -- buf.position() -- "+buf.position());
+    printBufferState();
     int currPos = buf.position();
     int currLimit = buf.limit();
     int remaining = buf.remaining();
-    //assert buf.remaining() == currLimit - currPos;
+    assert buf.remaining() == currLimit - currPos;
     //int processedSize = buf.remaining() - prevSize;
 
     if(marked && currPos > 0) {
@@ -240,44 +244,39 @@ public class ResettableGenericInputStream extends ResettableInputStream
     buf.compact();
 
     if(!buf.hasArray())
-      throw new IllegalStateException("Byte buffer should be backed by ARRAY");
-    System.out.println("processedSize ----"+currPos+"  remaining: "+buf.hasRemaining()+" --- position -- "+this.position+" limit -- "+buf.limit()+"  -- buf.position() -- "+buf.position());
+      throw new IllegalStateException("Byte buffer should be backed by array");
 
-    System.out.println("Abut to READ ---- "+ (buf.capacity() - buf.position()));
+    printBufferState();
+    logger.debug("Current Position - "+ currPos + "About to read - "+(buf.capacity() - buf.position()));
     int bytesRead = stream.read(buf.array(), buf.position(), buf.capacity() - buf.position());
     this.totalBytesRead += bytesRead;
 
-
-    System.out.println("totalBytesRead ----"+totalBytesRead+ "  bytesREAd ----"+bytesRead+ " --- "+buf.hasRemaining()+" --- "+buf.capacity()+"  "+buf.limit()+"  -- "+buf.position());
+    printBufferState();
+    logger.debug("totalBytesRead -"+totalBytesRead+ " bytesRead - "+bytesRead);
     if(bytesRead < 0 || bytesRead == 0) {
       buf.flip();
       return;
     }
 
-
-//  buf.put(tempBuf, 0, bytesRead);
+    //buf.put(tempBuf, 0, bytesRead);
     buf.clear();
     buf.position(remaining + bytesRead);
     buf.flip();
-    System.out.println("bytesREAd ----"+bytesRead+"  remaining: "+buf.hasRemaining()+" --- position -- "+this.position+" limit -- "+buf.limit()+"  -- buf.position() -- "+buf.position());
-    //TODO: after filling do flip()
-//    chan.position(position); // ensure we read from the proper offset
-//    chan.read(buf);
-//    buf.flip();
+    printBufferState();
   }
 
   @Override
   public void mark() throws IOException {
-    //tracker.storePosition(tell());
+    System.out.println("Storing tracker position ---------MARK------------- " + tell());
     tracker.storePosition(tell());
     markedBuffer.reset();
     buf.compact();
     buf.flip();
-    System.out.println("------------------------ MARKED @ -------------"+tell());
+    logger.debug("Marked @ "+tell());
     marked = true;
   }
 
-  @Override // TODO: see where the position is
+  @Override
   public void markPosition(long markPosition) throws IOException {
     long savedPosition = buf.position();
     int relMarkPos = (int)(savedPosition - (position - markPosition));
@@ -286,12 +285,12 @@ public class ResettableGenericInputStream extends ResettableInputStream
       mark();
       return;
     } else if(markPosition > position) { // future position = error // RARE
-      System.out.println("------------------------ RARE CASE REACHED ------------mark position-----to future-------------");
+      logger.debug(" Rare Case Reached - mark position - to future");
       return;
     } else if(markPosition >= position - buf.position()) { // within buf //TODO: Verify >=
       buf.position(relMarkPos);
       buf.compact();
-      //buf.position(buf.capacity() - relMarkPos); //TODO: verify this
+      //buf.position(buf.capacity() - relMarkPos); //TODO: verify
       buf.flip();
 
       buf.position((int)savedPosition - relMarkPos);
@@ -302,10 +301,13 @@ public class ResettableGenericInputStream extends ResettableInputStream
       markedBuffer.write(newBuf, markedBuffer.size() - relMarkPos, relMarkPos);
       markedBuffer = new ByteArrayOutputStream();
       markedBuffer.write(newBuf);
-    } else { // past position, new stream, skipt to mark position , copy everything from there to position to outputstream, compact the buf// RARE
-      //TODO:
+    } else {
+      // past position, new stream, skip to mark position , copy everything from there to position to outputstream,
+      // compact the buf// RARE
+      //TODO: This should not happen, yet we should handle this
+      logger.error("Trying to mark a past position - should not reach here");
     }
-
+    System.out.println("Storing tracker position ---------MARK--POSITION----------- " + markPosition);
     tracker.storePosition(markPosition);
   }
 
@@ -352,8 +354,7 @@ public class ResettableGenericInputStream extends ResettableInputStream
 
   @Override
   public synchronized void seek(long newPos) throws IOException {
-    System.out.println("SEEKING TO --------------------------------------------------------- "+ newPos);
-    logger.trace("Seek to position: {}", newPos);
+    logger.debug("Seek to position: {}", newPos);
 
     // check to see if we can seek within our existing buffer
     long relativeChange = newPos - position;
@@ -373,7 +374,7 @@ public class ResettableGenericInputStream extends ResettableInputStream
         long bytesToSkip = newPos - totalBytesRead;
         stream.skip(bytesToSkip);
         totalBytesRead += bytesToSkip;
-        System.out.println("Skipping bytes ---- "+ bytesToSkip + "  this.length is -----     " + this.length+"  totalbytesREead = "+totalBytesRead);
+        logger.debug("Skipping bytes - "+ bytesToSkip + " length is - " + this.length+" totalbytesREead - "+totalBytesRead);
       } else {
         //TODO: if(seek position is in the marked buffer outputstream)
         long markedBufPos = relativeChange + markedBuffer.size() + buf.position();
@@ -392,6 +393,7 @@ public class ResettableGenericInputStream extends ResettableInputStream
         } else {
           //should be a v rare case
           //TODO : logic for closing inputStream, wipe buffer, wipe outputstream and reopen stream and seek
+          logger.debug("Rare case reached -- Seek leads to creation of new stream");
           stream.close();
           markedBuffer.reset();
           buf.clear();
@@ -400,7 +402,6 @@ public class ResettableGenericInputStream extends ResettableInputStream
           stream = streamCreator.create();
           stream.skip(newPos);
           totalBytesRead = newPos;
-          System.out.println("------------------------ RARE CASE REACHED ------------------------------");
         }
       }
     }
@@ -409,12 +410,11 @@ public class ResettableGenericInputStream extends ResettableInputStream
     decoder.reset();
 
     // perform underlying file seek
-
     //chan.position(newPos);
 
     // reset position pointers
     position = syncPosition = newPos;
-    System.out.println("After seeking to newPos - Position is ---- "+ position);
+    logger.debug("After seeking to newPos - "+ position);
   }
 
   private void incrPosition(int incr, boolean updateSyncPosition) {
@@ -428,12 +428,6 @@ public class ResettableGenericInputStream extends ResettableInputStream
   public void close() throws IOException {
     tracker.close();
     stream.close();
-  }
-
-  public static void main(String[] args) {
-
-//    File f = new File();
-//    ResettableGenericInputStream is = new ResettableGenericInputStream(stream, tracker, length, bufSize, charset, decodeErrorPolicy, length);
   }
 
 }

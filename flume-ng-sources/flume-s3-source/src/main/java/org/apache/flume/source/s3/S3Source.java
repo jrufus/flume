@@ -122,11 +122,8 @@ public class S3Source extends AbstractSource
   @Override
   public synchronized void start() {
     logger.info("S3Source source starting with bucket - ", bucketName);
-
     executor = Executors.newSingleThreadScheduledExecutor();
-
     try {
-
       reader = new S3ObjectEventReader.Builder()
               .backingDirectory(backingDir)
               .deserializerType(deserializerType)
@@ -245,7 +242,7 @@ public class S3Source extends AbstractSource
           sourceCounter.addToEventAcceptedCount(events.size());
           sourceCounter.incrementAppendBatchAcceptedCount();
         }
-        logger.info("Spooling Directory Source runner has shutdown.");
+        logger.info("S3 Source runner has shutdown.");
       } catch (Throwable t) {
         logger.error("FATAL: " + S3Source.this.toString() + ": " +
                 "Uncaught exception in SpoolDirectorySource thread. " +

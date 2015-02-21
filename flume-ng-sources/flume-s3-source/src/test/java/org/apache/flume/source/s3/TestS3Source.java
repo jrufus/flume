@@ -82,32 +82,34 @@ public class TestS3Source {
     tmpDir.delete();
   }
 
-  @Test
-  public void testS3SourceRestart() throws Exception {
+  @Test(timeout=30000)
+  public void testS3Source() throws Exception {
+    testS3Source(false);
+  }
 
+  @Test(timeout=30000)
+  public void testS3SourceRestart() throws Exception {
+    testS3Source(true);
+  }
+
+  private void testS3Source(boolean restart) throws Exception {
     Context chContext = new Context();
-    chContext.put("capacity", "100");
-    chContext.put("transactionCapacity", "50");
+    chContext.put("capacity", "500");
+    chContext.put("transactionCapacity", "500");
     chContext.put("keep-alive", "0");
     Configurables.configure(channel, chContext);
 
     channel.start();
     Context context = new Context();
-
-
-
-
     String bucketName = "filesbucket";
     File bucketDir = new File(tmpDir, bucketName);
     if(bucketDir.exists()) {
-      System.out.println("Bucket Dir already exists ------");
       bucketDir.delete();
     }
     bucketDir.mkdir();
 
     int numFiles = 50;
     List<File> files = new ArrayList<File>();
-
     for(int i = 0; i < numFiles; i++) {
       File f1 = new File(bucketDir.getAbsolutePath() + "/file"+i);
       StringBuilder strb = new StringBuilder();
@@ -122,20 +124,18 @@ public class TestS3Source {
       files.add(f1);
     }
 
-    System.out.println("------------- bucket Dir path is -------------------  " + bucketDir.getAbsolutePath());
-    System.out.println("------------- tmp Dir path is -------------------  " + tmpDir.getAbsolutePath());
     context.put(S3SourceConfigurationConstants.BACKING_DIR, tmpDir.getAbsolutePath());
-//    context.put(S3SourceConfigurationConstants.ACCESS_KEY, "AKIAIACMXFTEW2G2JLMQ");
-//    context.put(S3SourceConfigurationConstants.SECRET_KEY, "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");
-//    context.put(S3SourceConfigurationConstants.BUCKET_NAME, "jrufusbucket1");
     context.put(S3SourceConfigurationConstants.ACCESS_KEY, "");
     context.put(S3SourceConfigurationConstants.SECRET_KEY, "");
     context.put(S3SourceConfigurationConstants.BUCKET_NAME, bucketName);
     context.put(S3SourceConfigurationConstants.BATCH_SIZE, "5");
 
+    //context.put(S3SourceConfigurationConstants.ACCESS_KEY, "AKIAIACMXFTEW2G2JLMQ");
+    //context.put(S3SourceConfigurationConstants.SECRET_KEY, "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");
+    //context.put(S3SourceConfigurationConstants.BUCKET_NAME, "jrufusbucket1");
+
     Configurables.configure(source, context);
     source.setBackOff(false);
-
     source.setS3Client(new TestAmazonS3Client(tmpDir.getAbsolutePath()));
     source.start();
 
@@ -144,169 +144,41 @@ public class TestS3Source {
     Transaction tx = channel.getTransaction();
     tx.begin();
     while(i < 50) {
-      System.out.println("------------- i -------------------  " + i);
-
-
       Event e = channel.take();
       if (e != null) {
         dataOut.add(new String(e.getBody(), "UTF-8"));
         i++;
-        System.out.println(new String(e.getBody(), "UTF-8"));
+        //System.out.println(new String(e.getBody(), "UTF-8"));
       }
     }
-    System.out.println("------------- i -------------------  " + i);
-    tx.commit();
-    tx.close();
-    source.stop();
-    channel.stop();
-
-    System.out.println("------------- RESTART -------------------------------------------------------------------------------- -------------------  " + i);
-    channel.start();
-    source.start();
-
-    i = 0;
-    while(i < 350) {
-      System.out.println("------------- i -------------------  " + i);
-      tx = channel.getTransaction();
-      tx.begin();
-      Event e = channel.take();
-      if (e != null) {
-        dataOut.add(new String(e.getBody(), "UTF-8"));
-        i++;
-        System.out.println(new String(e.getBody(), "UTF-8"));
-      }
-
+    if(restart) {
       tx.commit();
       tx.close();
-
+      source.stop();
+      channel.stop();
+      channel.start();
+      source.start();
+      tx = channel.getTransaction();
+      tx.begin();
     }
-
-  }
-
-
-  //@Test
-  public void testS3SourceOneFile() throws Exception {
-
-    channel.start();
-    Context context = new Context();
-
-
-
-
-    String bucketName = "filesbucket";
-    File bucketDir = new File(tmpDir, bucketName);
-    if(bucketDir.exists()) {
-      System.out.println("Bucket Dir already exists ------");
-      bucketDir.delete();
-    }
-    bucketDir.mkdir();
-
-    int numFiles = 50;
-    List<File> files = new ArrayList<File>();
-
-    for(int i = 0; i < numFiles; i++) {
-      File f1 = new File(bucketDir.getAbsolutePath() + "/file"+i);
-      StringBuilder strb = new StringBuilder();
-      for(int j = 0; j < i; j++) {
-        strb.append("file"+i+"line"+j+"\n");
+    while(i < 400) {
+      Event e = channel.take();
+      if (e != null) {
+        dataOut.add(new String(e.getBody(), "UTF-8"));
+        i++;
+        System.out.println(new String(e.getBody(), "UTF-8"));
       }
-
-      Files.write("file1line1\nfile1line2\nfile1line3\nfile1line4\n" +
-                      "file1line5\nfile1line6\nfile1line7\nfile1line8\n",
-              f1, Charsets.UTF_8);
-
-      files.add(f1);
     }
-
-    System.out.println("------------- bucket Dir path is -------------------  " + bucketDir.getAbsolutePath());
-    System.out.println("------------- tmp Dir path is -------------------  " + tmpDir.getAbsolutePath());
-    context.put(S3SourceConfigurationConstants.BACKING_DIR, tmpDir.getAbsolutePath());
-//    context.put(S3SourceConfigurationConstants.ACCESS_KEY, "AKIAIACMXFTEW2G2JLMQ");
-//    context.put(S3SourceConfigurationConstants.SECRET_KEY, "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");
-//    context.put(S3SourceConfigurationConstants.BUCKET_NAME, "jrufusbucket1");
-    context.put(S3SourceConfigurationConstants.ACCESS_KEY, "");
-    context.put(S3SourceConfigurationConstants.SECRET_KEY, "");
-    context.put(S3SourceConfigurationConstants.BUCKET_NAME, bucketName);
-    context.put(S3SourceConfigurationConstants.BATCH_SIZE, "5");
-
-    Configurables.configure(source, context);
-    source.setBackOff(false);
-
-    source.setS3Client(new TestAmazonS3Client(tmpDir.getAbsolutePath()));
-    source.start();
-
-    List<String> dataOut = Lists.newArrayList();
-  int i = 0;
-  while(true) {
-    if(i == 400)
-      System.out.println("I reached 400");
-    System.out.println("------------- i -------------------  " + i);
-    Transaction tx = channel.getTransaction();
-    tx.begin();
-    Event e = channel.take();
-    if (e != null) {
-      dataOut.add(new String(e.getBody(), "UTF-8"));
-      i++;
-      System.out.println(new String(e.getBody(), "UTF-8"));
-    }
-
     tx.commit();
     tx.close();
-//    if(i == 150)
-//      break;
-    if(e == null) {
-      System.out.println("------------- BREAKING -------------------  " + i);
-      break;
-    }
-    if(e == null && i > 50) {
-      break;
-    } else if(e == null) {
-      System.out.println("ABOUT TO SLEEP - -------------------");
-      Thread.sleep(30000);
-    }
-  }
-  source.stop();
-  channel.stop();
 
-
-
-  System.out.println("------------- STOPPED \n \n \n -------------------  " + i);
-  channel.start();
-  source.start();
-  while(true) {
-    System.out.println("------------- i -------------------  " + i);
-    Transaction tx = channel.getTransaction();
-    tx.begin();
-    Event e = channel.take();
-    if (e != null) {
-      dataOut.add(new String(e.getBody(), "UTF-8"));
-      i++;
-      System.out.println(new String(e.getBody(), "UTF-8"));
-    }
-
-    tx.commit();
-    tx.close();
-    if(i == 150)
-      break;
-//    if(e == null) {
-//      System.out.println("------------- BREAKING -------------------  " + i);
-//      break;
-//    }
-//    if(e == null && i > 50)
-//      break;
-//    else if(e == null){
-//      System.out.println("ABOUT TO SLEEP - -------------------");
-//      Thread.sleep(30000);
-//    }
+    // Successfully  reaching here w/o causing a test timeout
+    // ensures we have all the 50 files processed and received the 400 events
   }
 
 
-//  Assert.assertEquals(8, dataOut.size());
-    //source.stop();
-  }
 
-
-  //@Test
+  @Test
   public void testSourceDoesNotDieOnFullChannel() throws Exception {
 
     Context chContext = new Context();
@@ -322,23 +194,15 @@ public class TestS3Source {
     String bucketName = "filesbucket";
     File bucketDir = new File(tmpDir, bucketName);
     if(bucketDir.exists()) {
-      System.out.println("Bucket Dir already exists ------");
       bucketDir.delete();
     }
     bucketDir.mkdir();
 
-
-
     File f1 = new File(bucketDir.getAbsolutePath() + "/file1");
-
     Files.write("file1line1\nfile1line2\nfile1line3\nfile1line4\n" +
                     "file1line5\nfile1line6\nfile1line7\nfile1line8\n",
             f1, Charsets.UTF_8);
 
-
-
-    System.out.println("------------- bucket Dir path is -------------------  " + bucketDir.getAbsolutePath());
-    System.out.println("------------- tmp Dir path is -------------------  " + tmpDir.getAbsolutePath());
     context.put(S3SourceConfigurationConstants.BACKING_DIR, tmpDir.getAbsolutePath());
     context.put(S3SourceConfigurationConstants.ACCESS_KEY, "");
     context.put(S3SourceConfigurationConstants.SECRET_KEY, "");
@@ -347,7 +211,6 @@ public class TestS3Source {
 
     Configurables.configure(source, context);
     source.setBackOff(false);
-
     source.setS3Client(new TestAmazonS3Client(tmpDir.getAbsolutePath()));
     source.start();
 
@@ -385,22 +248,17 @@ public class TestS3Source {
 
 
 
-  //@Test
+  @Test
   public void testReconfigure() throws InterruptedException, IOException {
     final int NUM_RECONFIGS = 20;
     Context context = new Context();
     String bucketName = "filesbucket";
     File bucketDir = new File(tmpDir, bucketName);
     if(bucketDir.exists()) {
-      System.out.println("Bucket Dir already exists ------");
       bucketDir.delete();
     }
     bucketDir.mkdir();
     for (int i = 0; i < NUM_RECONFIGS; i++) {
-
-
-
-
       File file = new File(bucketDir.getAbsolutePath() + "/file1");
       Files.write("File " + i, file, Charsets.UTF_8);
       context.put(S3SourceConfigurationConstants.BACKING_DIR, tmpDir.getAbsolutePath());
@@ -429,13 +287,12 @@ public class TestS3Source {
     }
   }
 
-  //@Test
+  @Test
   public void testLifecycle() throws IOException, InterruptedException {
     Context context = new Context();
     String bucketName = "filesbucket";
     File bucketDir = new File(tmpDir, bucketName);
     if(bucketDir.exists()) {
-      System.out.println("Bucket Dir already exists ------");
       bucketDir.delete();
     }
     bucketDir.mkdir();
@@ -449,15 +306,13 @@ public class TestS3Source {
     context.put(S3SourceConfigurationConstants.ACCESS_KEY, "");
     context.put(S3SourceConfigurationConstants.SECRET_KEY, "");
     context.put(S3SourceConfigurationConstants.BUCKET_NAME, bucketName);
-
     Configurables.configure(source, context);
 
     for (int i = 0; i < 10; i++) {
       source.setS3Client(new TestAmazonS3Client(tmpDir.getAbsolutePath()));
       source.start();
 
-      Assert
-              .assertTrue("Reached start or error", LifecycleController.waitForOneOf(
+      Assert.assertTrue("Reached start or error", LifecycleController.waitForOneOf(
                       source, LifecycleState.START_OR_ERROR));
       Assert.assertEquals("Server is started", LifecycleState.START,
               source.getLifecycleState());
@@ -472,13 +327,12 @@ public class TestS3Source {
 
 
 
-  //@Test
+  @Test
   public void testPutFilenameHeader() throws IOException, InterruptedException {
     Context context = new Context();
     String bucketName = "filesbucket";
     File bucketDir = new File(tmpDir, bucketName);
     if(bucketDir.exists()) {
-      System.out.println("Bucket Dir already exists ------");
       bucketDir.delete();
     }
     bucketDir.mkdir();
@@ -492,9 +346,8 @@ public class TestS3Source {
     context.put(S3SourceConfigurationConstants.ACCESS_KEY, "");
     context.put(S3SourceConfigurationConstants.SECRET_KEY, "");
     context.put(S3SourceConfigurationConstants.BUCKET_NAME, bucketName);
-
-
     Configurables.configure(source, context);
+
     source.setS3Client(new TestAmazonS3Client(tmpDir.getAbsolutePath()));
     source.start();
     while (source.getSourceCounter().getEventAcceptedCount() < 8) {
@@ -509,14 +362,13 @@ public class TestS3Source {
     txn.close();
   }
 
-  //@Test
+  @Test
   public void testPutBasenameHeader() throws IOException,
     InterruptedException {
     Context context = new Context();
     String bucketName = "filesbucket";
     File bucketDir = new File(tmpDir, bucketName);
     if(bucketDir.exists()) {
-      System.out.println("Bucket Dir already exists ------");
       bucketDir.delete();
     }
     bucketDir.mkdir();
@@ -531,7 +383,6 @@ public class TestS3Source {
     context.put(S3SourceConfigurationConstants.SECRET_KEY, "");
     context.put(S3SourceConfigurationConstants.BUCKET_NAME, bucketName);
 
-
     Configurables.configure(source, context);
     source.setS3Client(new TestAmazonS3Client(tmpDir.getAbsolutePath()));
     source.start();
@@ -546,10 +397,6 @@ public class TestS3Source {
     txn.commit();
     txn.close();
   }
-
-
-
-
 }
 
 class TestAmazonS3Client extends AmazonS3Client {
