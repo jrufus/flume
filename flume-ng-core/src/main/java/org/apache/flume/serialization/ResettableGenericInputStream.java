@@ -109,8 +109,7 @@ public class ResettableGenericInputStream extends ResettableInputStream
     this.streamCreator = streamCreator;
     this.stream = streamCreator.create();
     this.buf = ByteBuffer.wrap(new byte[bufSize]);
-    logger.debug("Buffer position - " + buf.position() + " hasRemaining - "+ buf.hasRemaining() +
-            " Buffer Capacity - " + buf.capacity() + " Buffer Limit - " + buf.limit());
+    printBufferState("Initial Buffer State");
     buf.flip();
     this.byteBuf = new byte[1]; // single byte
     this.charBuf = CharBuffer.allocate(1); // single char
@@ -140,9 +139,8 @@ public class ResettableGenericInputStream extends ResettableInputStream
     }
     decoder.onMalformedInput(errorAction);
     decoder.onUnmappableCharacter(errorAction);
-    System.out.println("----------------------------------------");
-    System.out.println("STARTING ON ------- FILE --- " + tracker.getTarget()
-            + "@ POSITION -----------------------"+tracker.getPosition());
+    System.out.println("ResettableGenericInputStream Starting on File - "
+            + tracker.getTarget() + "@ Position - "+tracker.getPosition());
     seek(tracker.getPosition());
   }
 
@@ -184,7 +182,7 @@ public class ResettableGenericInputStream extends ResettableInputStream
     // This check ensures that there are at least maxCharWidth bytes in the buffer
     // before reaching EOF.
     if (buf.remaining() < maxCharWidth) {
-     logger.debug("buf.remaining() < maxCharWidth  "+ buf.remaining() +" - "+ maxCharWidth);
+      logger.debug("buf.remaining() < maxCharWidth  "+ buf.remaining() +" - "+ maxCharWidth);
       refillBuf();
     }
 
@@ -220,60 +218,83 @@ public class ResettableGenericInputStream extends ResettableInputStream
 
   }
 
-  private void printBufferState() {
-    logger.debug("Buffer - remaining: "+buf.hasRemaining()+" position - "+
-            this.position+" limit - "+buf.limit()+" buf.position() - "+buf.position());
+  private void printBufferState(String str) {
+    if(str != null && !str.isEmpty()) {
+      logger.debug(str);
+    }
+    logger.debug("Current position @ "+ this.position);
+    logger.debug("Buffer Stats: " +
+            " Position - " + buf.position() +
+            " Limit - " + buf.limit() +
+            " Capacity - " + buf.capacity() +
+            " Remaining: "+buf.hasRemaining());
   }
 
   private void refillBuf() throws IOException {
-    printBufferState();
+    printBufferState("Entering refillBuf() ");
     int currPos = buf.position();
-    int currLimit = buf.limit();
     int remaining = buf.remaining();
-    assert buf.remaining() == currLimit - currPos;
-    //int processedSize = buf.remaining() - prevSize;
 
+    // there is a mark, and some data is present in the buf
+    // that needs to be stored as part of the MarkedBuffer
     if(marked && currPos > 0) {
+      int initMarkedBufSize = markedBuffer.size();
       byte[] processedBuf = new byte[currPos];
       buf.rewind();
       buf.get(processedBuf);
       assert buf.position() == currPos;
       markedBuffer.write(processedBuf);
+      assert markedBuffer.size() == initMarkedBufSize + currPos;
     }
-    //buf.position(currPos); TODO use this if assert buf.position() == currPos; above fails
+
+    // data yet to be processed is moved to front, and the remaining space
+    // is made ready to be filled
     buf.compact();
 
     if(!buf.hasArray())
       throw new IllegalStateException("Byte buffer should be backed by array");
 
-    printBufferState();
-    logger.debug("Current Position - "+ currPos + "About to read - "+(buf.capacity() - buf.position()));
+    printBufferState("Before filling buffer");
+    // (buf.capacity() - buf.position()) same as buf.remaining(), when limit == capacity
+    logger.debug("About to read - " + (buf.capacity() - buf.position()));
     int bytesRead = stream.read(buf.array(), buf.position(), buf.capacity() - buf.position());
     this.totalBytesRead += bytesRead;
+    printBufferState("After filling buffer");
+    logger.debug("totalBytesRead - " + totalBytesRead + " Current bytesRead - "+bytesRead);
 
-    printBufferState();
-    logger.debug("totalBytesRead -"+totalBytesRead+ " bytesRead - "+bytesRead);
-    if(bytesRead < 0 || bytesRead == 0) {
+    //If nothing was read
+    if(bytesRead <= 0) {
+      logger.warn("refillBuf ended up reading 0 bytes");
       buf.flip();
       return;
     }
 
-    //buf.put(tempBuf, 0, bytesRead);
+    // prepare the buffer for consuming
     buf.clear();
     buf.position(remaining + bytesRead);
     buf.flip();
-    printBufferState();
+    printBufferState("Returning from refillBuf");
   }
 
   @Override
   public void mark() throws IOException {
-    System.out.println("Storing tracker position ---------MARK------------- " + tell());
-    tracker.storePosition(tell());
+    System.out.println("Storing syncPosition as tracker position in mark() " + tell());
+
+    // Always mark the syncPosition, which is safe to be reset to
+    mark(tell());
+  }
+
+  private void mark(long position) throws IOException {
+    tracker.storePosition(position);
+
+    // Discard all data in the MarkBuffer and processed data before buf.position()
     markedBuffer.reset();
+    // Move the unprocessed data to the beginning
     buf.compact();
+    // Move the position to 0, to start reading the unprocessed data
     buf.flip();
-    logger.debug("Marked @ "+tell());
     marked = true;
+    logger.debug("Marked @ "+position);
   }
 
   @Override
@@ -281,34 +302,39 @@ public class ResettableGenericInputStream extends ResettableInputStream
     long savedPosition = buf.position();
     int relMarkPos = (int)(savedPosition - (position - markPosition));
 
-    if (markPosition == position) { // current position
+    // current sync position
+    if(markPosition == tell()) {
       mark();
-      return;
-    } else if(markPosition > position) { // future position = error // RARE
-      logger.debug(" Rare Case Reached - mark position - to future");
-      return;
-    } else if(markPosition >= position - buf.position()) { // within buf //TODO: Verify >=
+    }
+    // current position
+    else if (markPosition == position) {
+      mark(position);
+    }
+    // future position = error
+    else if(markPosition > position) {
+      logger.debug(" Invalid case reached - markPosition > position  " +
+              "- markPosition - "+ markPosition + " position - " + position);
+    }
+    // within current buf
+    else if(markPosition >= position - buf.position()) {
       buf.position(relMarkPos);
-      buf.compact();
-      //buf.position(buf.capacity() - relMarkPos); //TODO: verify
-      buf.flip();
-
-      buf.position((int)savedPosition - relMarkPos);
-      marked = true;
-    } else if(markedBuffer.size() + relMarkPos >= 0) { // within outputStream
+      mark(markPosition);
+    }
+    // within outputStream
+    else if(markedBuffer.size() + relMarkPos >= 0) {
       int newBufPos = markedBuffer.size() + relMarkPos;
-      byte[] newBuf = new byte[relMarkPos];
-      markedBuffer.write(newBuf, markedBuffer.size() - relMarkPos, relMarkPos);
-      markedBuffer = new ByteArrayOutputStream();
-      markedBuffer.write(newBuf);
-    } else {
-      // past position, new stream, skip to mark position , copy everything from there to position to outputstream,
-      // compact the buf// RARE
+      byte[] newBuf = markedBuffer.toByteArray();
+      markedBuffer.reset();
+      markedBuffer.write(newBuf, newBufPos, markedBuffer.size() - newBufPos);
+      tracker.storePosition(markPosition);
+      marked = true;
+    }
+    // past position, new stream, skip to mark position , copy everything from there to position to outputstream,
+    else {
       //TODO: This should not happen, yet we should handle this
       logger.error("Trying to mark a past position - should not reach here");
     }
-    System.out.println("Storing tracker position ---------MARK--POSITION----------- " + markPosition);
-    tracker.storePosition(markPosition);
+    System.out.println("Storing tracker position - Mark Position - " + markPosition);
   }
 
   @Override
