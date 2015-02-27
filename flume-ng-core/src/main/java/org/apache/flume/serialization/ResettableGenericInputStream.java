@@ -298,53 +298,7 @@ public class ResettableGenericInputStream extends ResettableInputStream
   }
 
   @Override
-  public void markPosition(long markPosition) throws IOException {
-    long savedPosition = buf.position();
-    int relMarkPos = (int)(savedPosition - (position - markPosition));
-
-    // current sync position
-    if(markPosition == tell()) {
-      mark();
-    }
-    // current position
-    else if (markPosition == position) {
-      mark(position);
-    }
-    // future position = error
-    else if(markPosition > position) {
-      logger.debug(" Invalid case reached - markPosition > position  " +
-              "- markPosition - "+ markPosition + " position - " + position);
-    }
-    // within current buf
-    else if(markPosition >= position - buf.position()) {
-      buf.position(relMarkPos);
-      mark(markPosition);
-    }
-    // within outputStream
-    else if(markedBuffer.size() + relMarkPos >= 0) {
-      int newBufPos = markedBuffer.size() + relMarkPos;
-      byte[] newBuf = markedBuffer.toByteArray();
-      markedBuffer.reset();
-      markedBuffer.write(newBuf, newBufPos, markedBuffer.size() - newBufPos);
-      tracker.storePosition(markPosition);
-      marked = true;
-    }
-    // past position, new stream, skip to mark position , copy everything from there to position to outputstream,
-    else {
-      //TODO: This should not happen, yet we should handle this
-      logger.error("Trying to mark a past position - should not reach here");
-    }
-    System.out.println("Storing tracker position - Mark Position - " + markPosition);
-  }
-
-  @Override
-  public long getMarkPosition() throws IOException {
-    return tracker.getPosition();
-  }
-
-  @Override
   public void reset() throws IOException {
-
     if(!marked) {
       seek(tracker.getPosition());
       return;
@@ -419,7 +373,7 @@ public class ResettableGenericInputStream extends ResettableInputStream
         } else {
           //should be a v rare case
           //TODO : logic for closing inputStream, wipe buffer, wipe outputstream and reopen stream and seek
-          logger.debug("Rare case reached -- Seek leads to creation of new stream");
+          logger.warn("Rare case reached -- Seek leads to creation of new stream");
           stream.close();
           markedBuffer.reset();
           buf.clear();
@@ -454,6 +408,74 @@ public class ResettableGenericInputStream extends ResettableInputStream
   public void close() throws IOException {
     tracker.close();
     stream.close();
+  }
+
+  /*
+   * markPosition and getMarkPosition are supported as part of
+   * RemoteMarkable interface used by AvroEventDeserializer
+   *
+   * These two methods need to be tested by using Avro Events
+   */
+  @Override
+  public void markPosition(long markPosition) throws IOException {
+    long savedPosition = buf.position();
+    int relMarkPos = (int)(savedPosition - (position - markPosition));
+
+    // current sync position
+    if(markPosition == tell()) {
+      mark();
+    }
+    // current position
+    else if (markPosition == position) {
+      mark(position);
+    }
+    // future position = error
+    else if(markPosition > position) {
+      //no-op
+      logger.warn(" Invalid case reached - markPosition > position  " +
+              "- markPosition - "+ markPosition + " position - " + position);
+    }
+    // within current buf
+    else if(markPosition >= position - buf.position()) {
+      buf.position(relMarkPos);
+      mark(markPosition);
+    }
+    // within outputStream
+    else if(markedBuffer.size() + relMarkPos >= 0) {
+      int newBufPos = markedBuffer.size() + relMarkPos;
+      byte[] newBuf = markedBuffer.toByteArray();
+      markedBuffer.reset();
+      markedBuffer.write(newBuf, newBufPos, markedBuffer.size() - newBufPos);
+      tracker.storePosition(markPosition);
+      marked = true;
+    }
+    // past position, new stream, skip to mark position ,
+    // copy everything from there to position to outputstream,
+    else {
+      logger.warn("Trying to mark a past position - should not reach here");
+      stream.close();
+      markedBuffer.reset();
+
+      // move to the starting of mark
+      assert buf.remaining() == 0;
+      stream = streamCreator.create();
+      stream.skip(markPosition);
+
+      // copy the bytes not in the current byte buffer
+      int bytesToCopy = (int) totalBytesRead - buf.limit();
+      byte[] tempBuf = new byte[bytesToCopy];
+      stream.read(tempBuf, 0, bytesToCopy);
+      markedBuffer.write(tempBuf);
+
+      // skip to where it was in the orginal stream
+      stream.skip(totalBytesRead - markPosition);
+    }
+    System.out.println("Storing tracker position - Mark Position - " + markPosition);
+  }
+
+  @Override
+  public long getMarkPosition() throws IOException {
+    return tracker.getPosition();
   }
 
 }
