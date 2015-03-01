@@ -24,7 +24,6 @@ import org.mapdb.DB;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.HashSet;
 import java.util.Set;
 
 public class FileBasedMetadataBackingStore extends MetadataBackingStore {
@@ -41,11 +40,9 @@ public class FileBasedMetadataBackingStore extends MetadataBackingStore {
     File dbFile = new File(backingDir, name + ".db");
     db = DBMaker.newFileDB(dbFile)
             .closeOnJvmShutdown()
-            //.cacheSize() TODO: Investigate this option
             .mmapFileEnableIfSupported()
             .make();
     set = db.getHashSet("MapDBSet " + " - " + name);
-    System.out.println(" ------------ Set contents " + set);
   }
 
   void remove(String key) {

@@ -139,7 +139,7 @@ public class ResettableGenericInputStream extends ResettableInputStream
     }
     decoder.onMalformedInput(errorAction);
     decoder.onUnmappableCharacter(errorAction);
-    System.out.println("ResettableGenericInputStream Starting on File - "
+   logger.debug("ResettableGenericInputStream Starting on File - "
             + tracker.getTarget() + "@ Position - "+tracker.getPosition());
     seek(tracker.getPosition());
   }
@@ -278,13 +278,13 @@ public class ResettableGenericInputStream extends ResettableInputStream
 
   @Override
   public void mark() throws IOException {
-    System.out.println("Storing syncPosition as tracker position in mark() " + tell());
-
+    logger.debug("Mark() called " + tell());
     // Always mark the syncPosition, which is safe to be reset to
     mark(tell());
   }
 
   private void mark(long position) throws IOException {
+    logger.debug("Mark(position) called " + position);
     tracker.storePosition(position);
 
     // Discard all data in the MarkBuffer and processed data before buf.position()
@@ -299,21 +299,34 @@ public class ResettableGenericInputStream extends ResettableInputStream
 
   @Override
   public void reset() throws IOException {
+    logger.debug("Reset called - marked is - " + marked);
     if(!marked) {
+      logger.warn("reset() called when marked is set to false " +
+              "seeking to  tracker.getPosition() - " + tracker.getPosition());
       seek(tracker.getPosition());
       return;
     }
     marked = false;
-    buf.rewind();
-    if(markedBuffer.size() == 0)  return;
 
-    ByteBuffer newBuf = ByteBuffer.allocate(markedBuffer.size() + buf.remaining());
-    newBuf.put(markedBuffer.toByteArray()).put(buf);
-    assert (!newBuf.hasRemaining());
-    newBuf.flip();
-    assert (newBuf.remaining() == newBuf.limit());
-    buf = newBuf;
-    markedBuffer.reset();
+    if(markedBuffer.size() == 0) {
+      // make sure mark was placed in the current buffer
+      assert tracker.getPosition() >= position - buf.position() &&
+              tracker.getPosition() < position;
+      buf.position((int)(tracker.getPosition() - (position - buf.position())));
+    } else {
+      //TODO: Unit tests do not test this portion, so write tests to test this part
+      logger.debug("Reset called - markedBuffer.size() != 0");
+      assert tracker.getPosition() + markedBuffer.size() + buf.position() == position;
+      buf.rewind();
+      byte[] tempBuf = new byte[markedBuffer.size() + buf.remaining()];
+      ByteBuffer newBuf = ByteBuffer.wrap(tempBuf);
+      newBuf.put(markedBuffer.toByteArray()).put(buf);
+      assert (!newBuf.hasRemaining());
+      newBuf.flip();
+      assert (newBuf.remaining() == newBuf.limit());
+      buf = newBuf;
+      markedBuffer.reset();
+    }
 
     // clear decoder state
     decoder.reset();
@@ -328,7 +341,6 @@ public class ResettableGenericInputStream extends ResettableInputStream
   @Override
   public long tell() throws IOException {
     logger.trace("Tell position: {}", syncPosition);
-
     return syncPosition;
   }
 
@@ -345,24 +357,35 @@ public class ResettableGenericInputStream extends ResettableInputStream
       // we can reuse the read buffer
       buf.position((int)newBufPos);
     } else if(marked && newPos == tracker.getPosition()) {
+      //TODO: Unit tests do not test this portion
       reset();
     } else {
-      buf.clear();
-      buf.flip();
-      if(newPos > position) { //TODO: Do we have to discard previous mark ? or save all the seek data for reset to work ?
-        markedBuffer.reset();
-        long bytesToSkip = newPos - totalBytesRead;
-        stream.skip(bytesToSkip);
+      //if(seek position is beyond what we have read so far)
+      if(newPos > totalBytesRead) {
+        buf.rewind();
+        markedBuffer.write(buf.array(), 0, buf.limit());
+        int bytesToSkip = (int) (newPos - totalBytesRead);
+        byte[] skippedBytes = new byte[bytesToSkip];
+        stream.read(skippedBytes, 0, bytesToSkip);
         totalBytesRead += bytesToSkip;
-        logger.debug("Skipping bytes - "+ bytesToSkip + " length is - " + this.length+" totalbytesREead - "+totalBytesRead);
+        markedBuffer.write(skippedBytes);
+        buf.clear();
+        buf.flip();
+        logger.debug("Skipping bytes - "+ bytesToSkip + " length is - " +
+                this.length + " totalbytesRead - " + totalBytesRead);
       } else {
-        //TODO: if(seek position is in the marked buffer outputstream)
+        // if(seek position is in the marked buffer outputstream or even before that)
+
         long markedBufPos = relativeChange + markedBuffer.size() + buf.position();
         if(markedBufPos > 0) {
+          //seek position is in the marked buffer outputstream
+          //TODO: Unit tests do not test this portion
+          logger.debug("Seek to position: when markedBufPos > 0 - " + newPos);
           buf.rewind();
-          ByteBuffer newBuf = ByteBuffer.allocate(markedBuffer.size() + buf.remaining());
+          byte[] tempBuf = new byte[(int)(markedBuffer.size() - markedBufPos) + buf.remaining()];
+          ByteBuffer newBuf = ByteBuffer.wrap(tempBuf);
           byte[] markedArr = markedBuffer.toByteArray();
-          newBuf.put(markedArr, (int)markedBufPos, (int)(markedBuffer.size() - markedBufPos));
+          newBuf.put(markedArr, (int)markedBufPos, (int)(markedBuffer.size() - markedBufPos)).put(buf);
           assert (!newBuf.hasRemaining());
           newBuf.flip();
           assert (newBuf.remaining() == newBuf.limit());
@@ -371,9 +394,8 @@ public class ResettableGenericInputStream extends ResettableInputStream
           markedBuffer.reset();
           markedBuffer.write(markedArr, 0, (int)markedBufPos);
         } else {
-          //should be a v rare case
-          //TODO : logic for closing inputStream, wipe buffer, wipe outputstream and reopen stream and seek
-          logger.warn("Rare case reached -- Seek leads to creation of new stream");
+          //seeking to position before the currently marked position
+          logger.warn("Seek leads to creation of new stream");
           stream.close();
           markedBuffer.reset();
           buf.clear();
@@ -388,9 +410,6 @@ public class ResettableGenericInputStream extends ResettableInputStream
 
     // clear decoder state
     decoder.reset();
-
-    // perform underlying file seek
-    //chan.position(newPos);
 
     // reset position pointers
     position = syncPosition = newPos;
@@ -415,9 +434,12 @@ public class ResettableGenericInputStream extends ResettableInputStream
    * RemoteMarkable interface used by AvroEventDeserializer
    *
    * These two methods need to be tested by using Avro Events
+   *
+   * TODO: Write unit tests to test the below methods
    */
   @Override
   public void markPosition(long markPosition) throws IOException {
+    logger.debug("MarkPosition(markPosition) called " + markPosition);
     long savedPosition = buf.position();
     int relMarkPos = (int)(savedPosition - (position - markPosition));
 
@@ -470,7 +492,7 @@ public class ResettableGenericInputStream extends ResettableInputStream
       // skip to where it was in the orginal stream
       stream.skip(totalBytesRead - markPosition);
     }
-    System.out.println("Storing tracker position - Mark Position - " + markPosition);
+    logger.debug("Storing tracker position - Mark Position - " + markPosition);
   }
 
   @Override

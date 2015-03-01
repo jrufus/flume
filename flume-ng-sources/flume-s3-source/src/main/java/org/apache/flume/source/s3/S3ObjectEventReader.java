@@ -267,7 +267,6 @@ public class S3ObjectEventReader implements ReliableEventReader {
     if(objIter.hasNext()) {
       S3ObjectSummary objSummary = objIter.next();
       if(backingStore.contains(objSummary.getKey())) {
-        System.out.println("----------- Backing Store has ---- "+objSummary.getKey());
         return getNextFile();
       } else {
         return openFile(objSummary);
@@ -300,7 +299,7 @@ public class S3ObjectEventReader implements ReliableEventReader {
           DurablePositionTracker.getInstance(metaFile, key);
       if (!tracker.getTarget().equals(key)) {
         tracker.close();
-        System.out.println("Deleting META FILE -------------------------");
+        logger.debug("Deleting Meta file");
         deleteMetaFile();
         tracker = DurablePositionTracker.getInstance(metaFile, key);
       }
