@@ -51,7 +51,7 @@ public class S3Source extends AbstractSource
 
   private static final Logger logger = LoggerFactory.getLogger(S3Source.class);
 // Delay used when polling for new files
-  private static final int POLL_DELAY_MS = 1000; //TODO: see if this is fine, for spooling dir source this is 500ms
+  private static final int POLL_DELAY_MS = 1000;
 
   /* Config options */
   private String bucketName;
@@ -252,27 +252,4 @@ public class S3Source extends AbstractSource
       }
     }
   }
-
-//  public void connectToS3() {
-//    AWSCredentials credentials = new BasicAWSCredentials("AKIAIACMXFTEW2G2JLMQ", "dlE3nACto1tA+3V2m92vXhHxvwCeZZVsTHgAprqn");
-//    AmazonS3 conn = new AmazonS3Client(credentials);
-//    if(endPoint != null) {
-//      conn.setEndpoint(endPoint);
-//    }
-//    String bucketName = "jrufusbucket1";
-//    ObjectListing listing = conn.listObjects(bucketName);
-//    List<S3ObjectSummary> summaries = listing.getObjectSummaries();
-//    for(S3ObjectSummary summary : summaries) {
-//      String key = summary.getKey();
-//      System.out.println(key);
-//      S3Object object = conn.getObject(bucketName, summary.getKey());
-//      S3ObjectInputStream is = object.getObjectContent();
-//      BufferedInputStream bis = new BufferedInputStream(is);
-//      System.out.println("---- mark supported-----" + bis.markSupported());
-//    }
-//  }
-//
-//  public static void main(String[] args) {
-//    new S3Source().connectToS3();
-//  }
 }

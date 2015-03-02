@@ -91,9 +91,10 @@ public class S3ObjectEventReader implements ReliableEventReader {
    * Create a S3ObjectEventReader to watch the given directory.
    */
   private S3ObjectEventReader(File backingDirectory, String bucketName,
-                              String deserializerType,Context deserializerContext,
-                              String inputCharset, DecodeErrorPolicy decodeErrorPolicy,
-                              AmazonS3Client s3Client, MetadataBackingStore backingStore) throws IOException {
+                String deserializerType,Context deserializerContext,
+                String inputCharset, DecodeErrorPolicy decodeErrorPolicy,
+                AmazonS3Client s3Client, MetadataBackingStore backingStore)
+          throws IOException {
     // Sanity checks
     Preconditions.checkNotNull(backingDirectory);
     Preconditions.checkNotNull(deserializerType);
@@ -116,9 +117,10 @@ public class S3ObjectEventReader implements ReliableEventReader {
     Preconditions.checkState(backingDirectory.isDirectory(),
         "Path is not a directory: " + backingDirectory.getAbsolutePath());
 
-    // Do a canary test to make sure we have access to spooling directory
+    // Do a canary test to make sure we have access to backing directory
     try {
-      File canary = File.createTempFile("flume-spooldir-perm-check-", ".canary", backingDirectory);
+      File canary = File.createTempFile("flume-s3dir-perm-check-", ".canary",
+              backingDirectory);
       Files.write("testing flume file permissions\n", canary, Charsets.UTF_8);
       List<String> lines = Files.readLines(canary, Charsets.UTF_8);
       Preconditions.checkState(!lines.isEmpty(), "Empty canary file %s", canary);
@@ -146,13 +148,15 @@ public class S3ObjectEventReader implements ReliableEventReader {
     // ensure that meta directory exists
     if (!trackerDirectory.exists()) {
       if (!trackerDirectory.mkdir()) {
-        throw new IOException("Unable to mkdir nonexistent meta directory " + trackerDirectory);
+        throw new IOException("Unable to mkdir nonexistent meta directory " +
+                trackerDirectory);
       }
     }
 
     // ensure that the meta directory is a directory
     if (!trackerDirectory.isDirectory()) {
-      throw new IOException("Specified meta directory is not a directory" + trackerDirectory);
+      throw new IOException("Specified meta directory is not a directory" +
+              trackerDirectory);
     }
 
     this.metaFile = new File(trackerDirectory, metaFileName);
@@ -186,7 +190,7 @@ public class S3ObjectEventReader implements ReliableEventReader {
   public List<Event> readEvents(int numEvents) throws IOException {
     if (!committed) {
       if (!currentFile.isPresent()) {
-        throw new IllegalStateException("File should not roll when " +
+        throw new IllegalStateException("File should exist when " +
             "commit is outstanding.");
       }
       logger.info("Last read was never committed - resetting mark position.");
@@ -251,8 +255,8 @@ public class S3ObjectEventReader implements ReliableEventReader {
   }
 
   /**
-   * Returns the next file to be consumed from the chosen directory.
-   * If the directory is empty or the chosen file is not readable,
+   * Returns the next file to be consumed from the s3 Bucket
+   * If the bucket is empty or the chosen file is not readable,
    * this will return an absent option
    */
   private Optional<S3ObjectInfo> getNextFile() {
@@ -310,9 +314,10 @@ public class S3ObjectEventReader implements ReliableEventReader {
           tracker.getTarget(), key);
 
       ResettableInputStream in =
-          new ResettableGenericInputStream(new S3StreamCreator(s3Client, bucketName, key), tracker,
+          new ResettableGenericInputStream(
+                  new S3StreamCreator(s3Client, bucketName, key), tracker,
                   ResettableGenericInputStream.DEFAULT_BUF_SIZE, inputCharset,
-              decodeErrorPolicy, objSummary.getSize());
+                  decodeErrorPolicy, objSummary.getSize());
       EventDeserializer deserializer = EventDeserializerFactory.getInstance
           (deserializerType, deserializerContext, in);
 
@@ -410,8 +415,9 @@ public class S3ObjectEventReader implements ReliableEventReader {
 
     
     public S3ObjectEventReader build() throws IOException {
-      return new S3ObjectEventReader(backingDirectory, bucketName, deserializerType,
-                 deserializerContext, inputCharset,  decodeErrorPolicy, s3Client, backingStore);
+      return new S3ObjectEventReader(backingDirectory, bucketName,
+              deserializerType, deserializerContext, inputCharset,
+              decodeErrorPolicy, s3Client, backingStore);
     }
   }
 

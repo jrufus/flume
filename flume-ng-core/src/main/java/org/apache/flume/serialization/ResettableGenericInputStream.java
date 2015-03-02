@@ -139,8 +139,8 @@ public class ResettableGenericInputStream extends ResettableInputStream
     }
     decoder.onMalformedInput(errorAction);
     decoder.onUnmappableCharacter(errorAction);
-   logger.debug("ResettableGenericInputStream Starting on File - "
-            + tracker.getTarget() + "@ Position - "+tracker.getPosition());
+    logger.debug("ResettableGenericInputStream Starting on File - "
+            + tracker.getTarget() + "@ Position - " + tracker.getPosition());
     seek(tracker.getPosition());
   }
 
@@ -314,7 +314,7 @@ public class ResettableGenericInputStream extends ResettableInputStream
               tracker.getPosition() < position;
       buf.position((int)(tracker.getPosition() - (position - buf.position())));
     } else {
-      //TODO: Unit tests do not test this portion, so write tests to test this part
+      // reset called with data in the MarkedBuffer
       logger.debug("Reset called - markedBuffer.size() != 0");
       assert tracker.getPosition() + markedBuffer.size() + buf.position() == position;
       buf.rewind();
@@ -357,7 +357,6 @@ public class ResettableGenericInputStream extends ResettableInputStream
       // we can reuse the read buffer
       buf.position((int)newBufPos);
     } else if(marked && newPos == tracker.getPosition()) {
-      //TODO: Unit tests do not test this portion
       reset();
     } else {
       //if(seek position is beyond what we have read so far)
@@ -429,13 +428,15 @@ public class ResettableGenericInputStream extends ResettableInputStream
     stream.close();
   }
 
+  // markedBuffer.size() != 0 part of reset() and reset() part of seek()
+  // and markPsoition(position) needs test cases
+
   /*
    * markPosition and getMarkPosition are supported as part of
    * RemoteMarkable interface used by AvroEventDeserializer
    *
    * These two methods need to be tested by using Avro Events
    *
-   * TODO: Write unit tests to test the below methods
    */
   @Override
   public void markPosition(long markPosition) throws IOException {
