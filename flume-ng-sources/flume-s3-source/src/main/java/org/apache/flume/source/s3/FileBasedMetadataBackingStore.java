@@ -26,6 +26,9 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Set;
 
+/*
+ * Uses MapDB, to store the list of files already processed
+ */
 public class FileBasedMetadataBackingStore extends MetadataBackingStore {
   private DB db;
   private Set<String> set;

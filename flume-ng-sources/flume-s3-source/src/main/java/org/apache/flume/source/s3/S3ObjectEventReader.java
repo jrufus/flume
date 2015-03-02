@@ -413,7 +413,6 @@ public class S3ObjectEventReader implements ReliableEventReader {
       return this;
     }
 
-    
     public S3ObjectEventReader build() throws IOException {
       return new S3ObjectEventReader(backingDirectory, bucketName,
               deserializerType, deserializerContext, inputCharset,

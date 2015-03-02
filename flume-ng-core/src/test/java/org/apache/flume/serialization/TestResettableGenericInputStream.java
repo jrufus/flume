@@ -22,6 +22,9 @@ import com.google.common.base.Charsets;
 import java.io.*;
 import java.nio.charset.Charset;
 
+/*
+ * All test cases that test FileInputStream, also apply to ResettableGenericInputStream
+ */
 public class TestResettableGenericInputStream extends TestResettableFileInputStream{
   @Override
   public ResettableInputStream getResettableInputStream(File file, PositionTracker tracker)

@@ -18,16 +18,9 @@
  */
 package org.apache.flume.source.s3;
 
-import com.google.common.io.Files;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.File;
-import java.io.IOException;
-import java.io.RandomAccessFile;
 
-class MetadataBackingStoreFactory {
-  private static final Logger LOG = LoggerFactory.getLogger(MetadataBackingStoreFactory.class);
+public class MetadataBackingStoreFactory {
   private MetadataBackingStoreFactory() {}
   public static MetadataBackingStore get(String storeType, String name, File metadataDir){
     if(storeType.equals("memory")) {

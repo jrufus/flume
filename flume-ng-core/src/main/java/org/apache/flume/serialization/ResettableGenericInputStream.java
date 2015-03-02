@@ -35,6 +35,8 @@ import java.nio.charset.CodingErrorAction;
 
 
 /**
+* This class represents all inputstreams that do not natively support mark,
+* reset, markPosition(position) and seek(position)
 * <p/>This class makes the following assumptions:
 * <ol>
 *   <li>The underlying file is not changing while it is being read</li>

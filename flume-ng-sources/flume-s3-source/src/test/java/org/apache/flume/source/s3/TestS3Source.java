@@ -30,7 +30,6 @@ import com.amazonaws.services.s3.model.S3ObjectInputStream;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import com.google.common.collect.Lists;
 import org.apache.flume.Channel;
-import org.apache.flume.ChannelException;
 import org.apache.flume.ChannelSelector;
 import org.apache.flume.Context;
 import org.apache.flume.Event;
@@ -39,10 +38,9 @@ import org.apache.flume.channel.ChannelProcessor;
 import org.apache.flume.channel.MemoryChannel;
 import org.apache.flume.channel.ReplicatingChannelSelector;
 import org.apache.flume.conf.Configurables;
-import org.apache.flume.instrumentation.SourceCounter;
+
 import org.apache.flume.lifecycle.LifecycleController;
 import org.apache.flume.lifecycle.LifecycleState;
-import org.apache.flume.source.s3.S3SourceConfigurationConstants;
 import org.apache.http.client.methods.HttpRequestBase;
 import org.junit.After;
 import org.junit.Assert;
@@ -130,10 +128,6 @@ public class TestS3Source {
     context.put(S3SourceConfigurationConstants.BUCKET_NAME, bucketName);
     context.put(S3SourceConfigurationConstants.BATCH_SIZE, "5");
 
-    //context.put(S3SourceConfigurationConstants.ACCESS_KEY, "AKIAIACMXFTEW2G2JLMQ");
-    //context.put(S3SourceConfigurationConstants.SECRET_KEY, "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");
-    //context.put(S3SourceConfigurationConstants.BUCKET_NAME, "jrufusbucket1");
-
     Configurables.configure(source, context);
     source.setBackOff(false);
     source.setS3Client(new TestAmazonS3Client(tmpDir.getAbsolutePath()));
@@ -148,7 +142,6 @@ public class TestS3Source {
       if (e != null) {
         dataOut.add(new String(e.getBody(), "UTF-8"));
         i++;
-        //System.out.println(new String(e.getBody(), "UTF-8"));
       }
     }
     if(restart) {
@@ -166,17 +159,11 @@ public class TestS3Source {
       if (e != null) {
         dataOut.add(new String(e.getBody(), "UTF-8"));
         i++;
-        System.out.println(new String(e.getBody(), "UTF-8"));
       }
     }
     tx.commit();
     tx.close();
-
-    // Successfully  reaching here w/o causing a test timeout
-    // ensures we have all the 50 files processed and received the 400 events
   }
-
-
 
   @Test
   public void testSourceDoesNotDieOnFullChannel() throws Exception {
@@ -226,13 +213,11 @@ public class TestS3Source {
       tx.begin();
       Event e = channel.take();
       if (e != null) {
-        System.out.println("Event taken is **************** "+e.getBody());
         dataOut.add(new String(e.getBody(), "UTF-8"));
         i++;
       }
       e = channel.take();
       if (e != null) {
-        System.out.println("Event taken is **************** "+e.getBody());
         dataOut.add(new String(e.getBody(), "UTF-8"));
         i++;
       }
@@ -244,9 +229,6 @@ public class TestS3Source {
     Assert.assertEquals(8, dataOut.size());
     source.stop();
   }
-
-
-
 
   @Test
   public void testReconfigure() throws InterruptedException, IOException {
@@ -324,8 +306,6 @@ public class TestS3Source {
               source.getLifecycleState());
     }
   }
-
-
 
   @Test
   public void testPutFilenameHeader() throws IOException, InterruptedException {
@@ -410,7 +390,6 @@ class TestAmazonS3Client extends AmazonS3Client {
   @Override
   public TestObjectListing listObjects(String bucketName) {
     File dir = new File(parentDir, bucketName);
-    System.out.println("Test Obj Listing for Dir ----- "+ dir.getAbsolutePath());
     File[] files = dir.listFiles();
     return new TestObjectListing(files);
   }
