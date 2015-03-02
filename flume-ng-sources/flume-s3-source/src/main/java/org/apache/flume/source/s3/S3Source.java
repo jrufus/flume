@@ -245,7 +245,7 @@ public class S3Source extends AbstractSource
         logger.info("S3 Source runner has shutdown.");
       } catch (Throwable t) {
         logger.error("FATAL: " + S3Source.this.toString() + ": " +
-                "Uncaught exception in SpoolDirectorySource thread. " +
+                "Uncaught exception in S3Source thread. " +
                 "Restart or reconfigure Flume to continue processing.", t);
         hasFatalError = true;
         Throwables.propagate(t);
