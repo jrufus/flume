@@ -18,17 +18,44 @@
  */
 package org.apache.flume.source.s3;
 
-import java.io.File;
+import org.apache.flume.Context;
+import org.apache.flume.FlumeException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 
 public class MetadataBackingStoreFactory {
   private MetadataBackingStoreFactory() {}
-  public static MetadataBackingStore get(String storeType, String name, File metadataDir){
-    if(storeType.equals("memory")) {
-      return new InMemoryMetadataBackingStore(name);
-    } else if(storeType.equals("file")) {
-      return new FileBasedMetadataBackingStore(name, metadataDir);
-    } else {
-      throw new IllegalArgumentException(storeType);
+
+  private static final Logger logger =
+          LoggerFactory.getLogger(MetadataBackingStoreFactory.class);
+
+  public static MetadataBackingStore get(String storeType, String bucketName, Context context) {
+    MetadataBackingStoreType type;
+    try {
+      type = MetadataBackingStoreType.valueOf(storeType);
+    } catch (IllegalArgumentException e) {
+      logger.debug("Not in enum, loading builder class: {}", storeType);
+      type = MetadataBackingStoreType.FILE;
     }
+    Class<? extends MetadataBackingStore.Builder> builderClass =
+            type.getBuilderClass();
+    // build the builder
+    MetadataBackingStore.Builder builder;
+    try {
+      builder = builderClass.newInstance();
+    } catch (InstantiationException ex) {
+      String errMessage = "Cannot instantiate builder: " + storeType;
+      logger.error(errMessage, ex);
+      throw new FlumeException(errMessage, ex);
+    } catch (IllegalAccessException ex) {
+      String errMessage = "Cannot instantiate builder: " + storeType;
+      logger.error(errMessage, ex);
+      throw new FlumeException(errMessage, ex);
+    }
+
+    MetadataBackingStore store = builder.build(bucketName, context);
+    store.init();
+    return store;
   }
 }

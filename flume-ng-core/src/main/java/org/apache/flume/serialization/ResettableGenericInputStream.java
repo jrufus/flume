@@ -311,6 +311,7 @@ public class ResettableGenericInputStream extends ResettableInputStream
     marked = false;
 
     if(markedBuffer.size() == 0) {
+      //return;
       // make sure mark was placed in the current buffer
       assert tracker.getPosition() >= position - buf.position() &&
               tracker.getPosition() < position;

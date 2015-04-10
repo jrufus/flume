@@ -18,6 +18,8 @@
 
 package org.apache.flume.source.s3;
 
+import org.apache.flume.serialization.PositionTracker;
+
 import java.io.IOException;
 import java.util.HashSet;
 import java.util.Set;
@@ -29,17 +31,66 @@ public class InMemoryMetadataBackingStore extends MetadataBackingStore {
     super(name);
   }
 
+  @Override
+  void init() {
+
+  }
+
+  @Override
   void remove(String key) {
     set.remove(key);
   }
 
+  @Override
   void add(String key) {
     set.add(key);
   }
 
+  @Override
   boolean contains(String key) {
     return set.contains(key);
   }
 
+  @Override
   void close() throws IOException {}
+
+  @Override
+  PositionTracker getPositionTracker(String key) {
+    return new TransientPositionTracker(key);
+  }
+
+  @Override
+  void resetPositionTracker() {
+    // no-op
+  }
+
+  static class TransientPositionTracker implements PositionTracker {
+
+    private final String target;
+    private long position = 0;
+
+    public TransientPositionTracker(String target) {
+      this.target = target;
+    }
+
+    @Override
+    public void storePosition(long position) throws IOException {
+      this.position = position;
+    }
+
+    @Override
+    public long getPosition() {
+      return position;
+    }
+
+    @Override
+    public String getTarget() {
+      return target;
+    }
+
+    @Override
+    public void close() throws IOException {
+      // no-op
+    }
+  }
 }

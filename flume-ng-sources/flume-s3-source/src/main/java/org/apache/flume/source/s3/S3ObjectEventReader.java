@@ -67,12 +67,10 @@ public class S3ObjectEventReader implements ReliableEventReader {
   private static final Logger logger = LoggerFactory
       .getLogger(S3ObjectEventReader.class);
 
-  static final String metaFileName = ".flumes3-main.meta";
 
   private final String bucketName;
   private final String deserializerType;
   private final Context deserializerContext;
-  private final File metaFile;
   private final Charset inputCharset;
   private final DecodeErrorPolicy decodeErrorPolicy;
 
@@ -90,13 +88,12 @@ public class S3ObjectEventReader implements ReliableEventReader {
   /**
    * Create a S3ObjectEventReader to watch the given directory.
    */
-  private S3ObjectEventReader(File backingDirectory, String bucketName,
+  private S3ObjectEventReader(String bucketName,
                 String deserializerType,Context deserializerContext,
                 String inputCharset, DecodeErrorPolicy decodeErrorPolicy,
                 AmazonS3Client s3Client, MetadataBackingStore backingStore)
           throws IOException {
     // Sanity checks
-    Preconditions.checkNotNull(backingDirectory);
     Preconditions.checkNotNull(deserializerType);
     Preconditions.checkNotNull(deserializerContext);
     Preconditions.checkNotNull(inputCharset);
@@ -105,32 +102,10 @@ public class S3ObjectEventReader implements ReliableEventReader {
 
 
     if (logger.isDebugEnabled()) {
-      logger.debug("Initializing {} with directory={}, metaDir={}, " +
+      logger.debug("Initializing {} with directory={}, metaDataStoreType={}, " +
           "deserializer={}",
           new Object[] { S3ObjectEventReader.class.getSimpleName(),
-                  bucketName, backingDirectory, deserializerType });
-    }
-
-    // Verify directory exists and is readable/writable
-    Preconditions.checkState(backingDirectory.exists(),
-        "Directory does not exist: " + backingDirectory.getAbsolutePath());
-    Preconditions.checkState(backingDirectory.isDirectory(),
-        "Path is not a directory: " + backingDirectory.getAbsolutePath());
-
-    // Do a canary test to make sure we have access to backing directory
-    try {
-      File canary = File.createTempFile("flume-s3dir-perm-check-", ".canary",
-              backingDirectory);
-      Files.write("testing flume file permissions\n", canary, Charsets.UTF_8);
-      List<String> lines = Files.readLines(canary, Charsets.UTF_8);
-      Preconditions.checkState(!lines.isEmpty(), "Empty canary file %s", canary);
-      if (!canary.delete()) {
-        throw new IOException("Unable to delete canary file " + canary);
-      }
-      logger.debug("Successfully created and deleted canary file: {}", canary);
-    } catch (IOException e) {
-      throw new FlumeException("Unable to read and modify files" +
-          " in the spooling directory: " + backingDirectory, e);
+                  bucketName, backingStore.getName(), deserializerType });
     }
 
     this.bucketName = bucketName;
@@ -143,23 +118,7 @@ public class S3ObjectEventReader implements ReliableEventReader {
     this.s3Client = s3Client;
     this.backingStore = backingStore;
 
-    File trackerDirectory = new File(backingDirectory, "tracker");
 
-    // ensure that meta directory exists
-    if (!trackerDirectory.exists()) {
-      if (!trackerDirectory.mkdir()) {
-        throw new IOException("Unable to mkdir nonexistent meta directory " +
-                trackerDirectory);
-      }
-    }
-
-    // ensure that the meta directory is a directory
-    if (!trackerDirectory.isDirectory()) {
-      throw new IOException("Specified meta directory is not a directory" +
-              trackerDirectory);
-    }
-
-    this.metaFile = new File(trackerDirectory, metaFileName);
   }
 
   @VisibleForTesting
@@ -299,13 +258,13 @@ public class S3ObjectEventReader implements ReliableEventReader {
     String key = objSummary.getKey();
     try {
       // roll the meta file, if needed
-      PositionTracker tracker =
-          DurablePositionTracker.getInstance(metaFile, key);
+      PositionTracker tracker = backingStore.getPositionTracker(key);
+
       if (!tracker.getTarget().equals(key)) {
         tracker.close();
         logger.debug("Deleting Meta file");
-        deleteMetaFile();
-        tracker = DurablePositionTracker.getInstance(metaFile, key);
+        backingStore.resetPositionTracker();
+        tracker = backingStore.getPositionTracker(key);
       }
 
       // sanity check
@@ -332,12 +291,6 @@ public class S3ObjectEventReader implements ReliableEventReader {
     }
   }
 
-  private void deleteMetaFile() throws IOException {
-    if (metaFile.exists() && !metaFile.delete()) {
-      throw new IOException("Unable to delete old meta file " + metaFile);
-    }
-  }
-
   /** An immutable class with information about a S3Object being processed. */
   private static class S3ObjectInfo {
     private final String key;
@@ -360,7 +313,7 @@ public class S3ObjectEventReader implements ReliableEventReader {
    * Special builder class for S3ObjectEventReader
    */
   public static class Builder {
-    private File backingDirectory;
+    //private File backingDirectory;
     private String bucketName;
     private String deserializerType =
             S3SourceConfigurationConstants.DEFAULT_DESERIALIZER;
@@ -378,10 +331,10 @@ public class S3ObjectEventReader implements ReliableEventReader {
       return this;
     }
 
-    public Builder backingDirectory(File directory) {
-      this.backingDirectory = directory;
-      return this;
-    }
+//    public Builder backingDirectory(File directory) {
+//      this.backingDirectory = directory;
+//      return this;
+//    }
 
     public Builder bucket(String bucketName) {
       this.bucketName = bucketName;
@@ -414,7 +367,7 @@ public class S3ObjectEventReader implements ReliableEventReader {
     }
 
     public S3ObjectEventReader build() throws IOException {
-      return new S3ObjectEventReader(backingDirectory, bucketName,
+      return new S3ObjectEventReader(bucketName,
               deserializerType, deserializerContext, inputCharset,
               decodeErrorPolicy, s3Client, backingStore);
     }

@@ -31,7 +31,6 @@ import org.apache.flume.source.AbstractSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
@@ -56,7 +55,6 @@ public class S3Source extends AbstractSource
   /* Config options */
   private String bucketName;
   private int batchSize;
-  private File backingDir;
   private MetadataBackingStore backingStore;
 
   private String deserializerType;
@@ -88,15 +86,9 @@ public class S3Source extends AbstractSource
     secretKey = context.getString(SECRET_KEY);
     Preconditions.checkState(bucketName != null, "Configuration must specify a secret key");
 
-    String backingDirPath = context.getString(BACKING_DIR);
-    Preconditions.checkState(backingDirPath != null, "Configuration must specify an existing directory for storing metadata");
-
-    backingDir = new File(backingDirPath);
-    Preconditions.checkState(backingDir.exists(), "Configuration must specify an existing backing directory");
-
     batchSize = context.getInteger(BATCH_SIZE, DEFAULT_BATCH_SIZE);
 
-    backingStore = MetadataBackingStoreFactory.get(context.getString(BACKING_STORE, DEFAULT_BACKING_STORE), bucketName, backingDir);
+    backingStore = MetadataBackingStoreFactory.get(context.getString(BACKING_STORE, DEFAULT_BACKING_STORE), bucketName, context);
 
     deserializerType = context.getString(DESERIALIZER, DEFAULT_DESERIALIZER);
     deserializerContext = new Context(context.getSubProperties(DESERIALIZER + "."));
@@ -125,7 +117,6 @@ public class S3Source extends AbstractSource
     executor = Executors.newSingleThreadScheduledExecutor();
     try {
       reader = new S3ObjectEventReader.Builder()
-              .backingDirectory(backingDir)
               .deserializerType(deserializerType)
               .deserializerContext(deserializerContext)
               .inputCharset(inputCharset)

@@ -18,33 +18,19 @@
 
 package org.apache.flume.source.s3;
 
-import org.apache.flume.Context;
-import org.apache.flume.serialization.PositionTracker;
+public enum MetadataBackingStoreType {
+  FILE(FileBasedMetadataBackingStore.Builder.class),
+  MEMORY(InMemoryMetadataBackingStore.Builder.class),
+  OTHER(null);
 
-import java.io.IOException;
+  private final Class<? extends MetadataBackingStore.Builder> builderClass;
 
-abstract class MetadataBackingStore {
-  private final String name;
-
-  protected MetadataBackingStore(String name) {
-    this.name = name;
+  MetadataBackingStoreType(Class<? extends MetadataBackingStore.Builder> builderClass) {
+    this.builderClass = builderClass;
   }
 
-  abstract void init();
-
-  abstract void remove(String key);
-  abstract void add(String key);
-  abstract boolean contains(String key);
-  abstract void close() throws IOException;
-  abstract PositionTracker getPositionTracker(String key);
-  abstract void resetPositionTracker();
-
-  String getName() {
-    return name;
-  }
-
-  public interface Builder {
-    public MetadataBackingStore build(String bucketName, Context context);
+  public Class<? extends MetadataBackingStore.Builder> getBuilderClass() {
+    return builderClass;
   }
 
 }
