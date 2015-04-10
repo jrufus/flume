@@ -331,11 +331,6 @@ public class S3ObjectEventReader implements ReliableEventReader {
       return this;
     }
 
-//    public Builder backingDirectory(File directory) {
-//      this.backingDirectory = directory;
-//      return this;
-//    }
-
     public Builder bucket(String bucketName) {
       this.bucketName = bucketName;
       return this;

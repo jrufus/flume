@@ -20,8 +20,7 @@ package org.apache.flume.source.s3;
 
 public enum MetadataBackingStoreType {
   FILE(FileBasedMetadataBackingStore.Builder.class),
-  MEMORY(InMemoryMetadataBackingStore.Builder.class),
-  OTHER(null);
+  MEMORY(InMemoryMetadataBackingStore.Builder.class);
 
   private final Class<? extends MetadataBackingStore.Builder> builderClass;
 

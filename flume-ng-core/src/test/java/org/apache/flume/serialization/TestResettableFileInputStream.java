@@ -289,7 +289,6 @@ public class TestResettableFileInputStream {
     assertEquals(expected.get(0), result0a);
 
     in.mark();
-    System.out.println("-----------------"+tracker.getPosition());
 
     String result1 = readLine(in, MAX_LEN);
     assertEquals(expected.get(1), result1);

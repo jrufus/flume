@@ -98,7 +98,7 @@ public class FileBasedMetadataBackingStore extends MetadataBackingStore {
     this.metaFile = new File(trackerDirectory, metaFileName);
   }
 
-  @Override //TODO: CAll this everywhere in the factory
+  @Override
   void init() {
     File dbFile = new File(backingDir, name + ".db");
     db = DBMaker.newFileDB(dbFile)
@@ -132,7 +132,7 @@ public class FileBasedMetadataBackingStore extends MetadataBackingStore {
 
   @Override
   PositionTracker getPositionTracker(String key) {
-    PositionTracker tracker = null;
+    PositionTracker tracker;
     try {
       tracker = DurablePositionTracker.getInstance(metaFile, key);
     } catch (IOException e) {
@@ -149,12 +149,9 @@ public class FileBasedMetadataBackingStore extends MetadataBackingStore {
   }
 
   public static class Builder implements MetadataBackingStore.Builder {
-
     @Override
     public MetadataBackingStore build(String bucketName, Context context) {
-      FileBasedMetadataBackingStore store = new FileBasedMetadataBackingStore(bucketName, context);
-      return store;
+      return new FileBasedMetadataBackingStore(bucketName, context);
     }
-
   }
 }
